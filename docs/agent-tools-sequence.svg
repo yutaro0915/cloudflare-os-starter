@@ -1,0 +1,113 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1500 1030" font-family="system-ui, -apple-system, 'Hiragino Sans', 'Noto Sans JP', sans-serif">
+  <!--
+    エージェントのツール注入フロー（現状 + 提案）シーケンス図（2026-08-07）
+    正本: agent.ts（defineTool @2307 / spawnerConfig 絞り込み @2834 / runAgentLoopContinue @3033）
+  -->
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#374151"/>
+    </marker>
+    <marker id="arrBlue" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#1565C0"/>
+    </marker>
+  </defs>
+
+  <text x="750" y="34" text-anchor="middle" font-size="19" font-weight="700" fill="#111827">エージェントのツール注入フロー — 現状と提案（シーケンス図・2026-08-07）</text>
+
+  <!-- 凡例（右上・モデルの外側） -->
+  <rect x="1290" y="60" width="200" height="60" rx="8" fill="#FAFAFA" stroke="#D1D5DB" stroke-width="1"/>
+  <line x1="1304" y1="82" x2="1344" y2="82" stroke="#374151" stroke-width="1.6" marker-end="url(#arr)"/>
+  <text x="1352" y="86" font-size="10.5" fill="#374151">黒実線: 現状</text>
+  <line x1="1304" y1="108" x2="1344" y2="108" stroke="#1565C0" stroke-width="1.6" stroke-dasharray="6 4" marker-end="url(#arrBlue)"/>
+  <text x="1352" y="112" font-size="10.5" fill="#1565C0">青破線: 提案</text>
+
+  <!-- 参加者（lifeline ヘッダ） -->
+  <rect x="50" y="60" width="100" height="42" rx="6" fill="#E3F2FD" stroke="#1976D2" stroke-width="1.2"/>
+  <text x="100" y="85" text-anchor="middle" font-size="11.5" font-weight="700" fill="#0D47A1">ユーザー</text>
+  <rect x="230" y="60" width="100" height="42" rx="6" fill="#E3F2FD" stroke="#1976D2" stroke-width="1.2"/>
+  <text x="280" y="85" text-anchor="middle" font-size="11.5" font-weight="700" fill="#0D47A1">フロント SPA</text>
+  <rect x="420" y="60" width="100" height="42" rx="6" fill="#FFF3E0" stroke="#EF6C00" stroke-width="1.2"/>
+  <text x="470" y="85" text-anchor="middle" font-size="11.5" font-weight="700" fill="#E65100">server.ts</text>
+  <rect x="605" y="60" width="100" height="42" rx="6" fill="#FFF3E0" stroke="#EF6C00" stroke-width="1.2"/>
+  <text x="655" y="85" text-anchor="middle" font-size="11.5" font-weight="700" fill="#E65100">OverseerDO</text>
+  <rect x="790" y="60" width="100" height="42" rx="6" fill="#FFF3E0" stroke="#EF6C00" stroke-width="1.2"/>
+  <text x="840" y="85" text-anchor="middle" font-size="11.5" font-weight="700" fill="#E65100">agent.ts</text>
+  <rect x="975" y="60" width="100" height="42" rx="6" fill="#ECEFF1" stroke="#607D8B" stroke-width="1.2"/>
+  <text x="1025" y="85" text-anchor="middle" font-size="11.5" font-weight="700" fill="#37474F">pi ループ</text>
+  <rect x="1160" y="60" width="100" height="42" rx="6" fill="#E8F5E9" stroke="#2E7D32" stroke-width="1.2"/>
+  <text x="1210" y="85" text-anchor="middle" font-size="11.5" font-weight="700" fill="#1B5E20">モデル</text>
+
+  <!-- lifelines -->
+  <line x1="100" y1="102" x2="100" y2="1010" stroke="#9CA3AF" stroke-width="1" stroke-dasharray="4 4"/>
+  <line x1="280" y1="102" x2="280" y2="1010" stroke="#9CA3AF" stroke-width="1" stroke-dasharray="4 4"/>
+  <line x1="470" y1="102" x2="470" y2="1010" stroke="#9CA3AF" stroke-width="1" stroke-dasharray="4 4"/>
+  <line x1="655" y1="102" x2="655" y2="1010" stroke="#9CA3AF" stroke-width="1" stroke-dasharray="4 4"/>
+  <line x1="840" y1="102" x2="840" y2="1010" stroke="#9CA3AF" stroke-width="1" stroke-dasharray="4 4"/>
+  <line x1="1025" y1="102" x2="1025" y2="1010" stroke="#9CA3AF" stroke-width="1" stroke-dasharray="4 4"/>
+  <line x1="1210" y1="102" x2="1210" y2="1010" stroke="#9CA3AF" stroke-width="1" stroke-dasharray="4 4"/>
+
+  <!-- ============ 現状フロー ============ -->
+  <text x="60" y="145" font-size="13" font-weight="700" fill="#374151">現状: ツールの注入（ツール定義は agent.ts にハードコード）</text>
+
+  <line x1="100" y1="175" x2="276" y2="175" stroke="#374151" stroke-width="1.6" marker-end="url(#arr)"/>
+  <text x="112" y="167" font-size="11" fill="#374151">① チャット送信</text>
+  <line x1="280" y1="225" x2="466" y2="225" stroke="#374151" stroke-width="1.6" marker-end="url(#arr)"/>
+  <text x="292" y="217" font-size="11" fill="#374151">② /api RPC（capnweb WebSocket）</text>
+  <line x1="470" y1="275" x2="651" y2="275" stroke="#374151" stroke-width="1.6" marker-end="url(#arr)"/>
+  <text x="482" y="267" font-size="11" fill="#374151">③ chat.start（ワークスペース RPC）</text>
+  <line x1="655" y1="325" x2="836" y2="325" stroke="#374151" stroke-width="1.6" marker-end="url(#arr)"/>
+  <text x="667" y="317" font-size="11" fill="#374151">④ buildAgent(chatId)</text>
+
+  <rect x="855" y="350" width="165" height="44" rx="6" fill="#FFF8E1" stroke="#F57F17" stroke-width="1"/>
+  <line x1="840" y1="372" x2="1020" y2="372" stroke="#9CA3AF" stroke-width="0.8"/>
+  <text x="865" y="368" font-size="10.5" fill="#7A4E00">⑤ tools Record 組み立て</text>
+  <text x="865" y="384" font-size="10.5" fill="#7A4E00">（defineTool ×12・コード内）</text>
+
+  <rect x="665" y="415" width="165" height="44" rx="6" fill="#FFF8E1" stroke="#F57F17" stroke-width="1"/>
+  <line x1="655" y1="437" x2="830" y2="437" stroke="#9CA3AF" stroke-width="0.8"/>
+  <text x="675" y="433" font-size="10.5" fill="#7A4E00">⑥ spawnerConfig なら絞り込み</text>
+  <text x="675" y="449" font-size="10.5" fill="#7A4E00">（sub-agent のみ・現状唯一の制御）</text>
+
+  <line x1="840" y1="510" x2="1021" y2="510" stroke="#374151" stroke-width="1.6" marker-end="url(#arr)"/>
+  <text x="852" y="502" font-size="11" fill="#374151">⑦ runAgentLoopContinue</text>
+  <text x="852" y="528" font-size="9.5" fill="#6B7280">（systemPrompt, tools: toolList）</text>
+
+  <line x1="1025" y1="565" x2="1206" y2="565" stroke="#374151" stroke-width="1.6" marker-end="url(#arr)"/>
+  <text x="1037" y="557" font-size="11" fill="#374151">⑧ ツールスキーマ付きプロンプト</text>
+
+  <line x1="1206" y1="620" x2="1029" y2="620" stroke="#374151" stroke-width="1.6" marker-end="url(#arr)"/>
+  <text x="1040" y="612" font-size="11" fill="#374151">⑨ ツールコール</text>
+
+  <line x1="1021" y1="675" x2="844" y2="675" stroke="#374151" stroke-width="1.6" marker-end="url(#arr)"/>
+  <text x="860" y="667" font-size="11" fill="#374151">⑩ ツール execute 実行</text>
+
+  <line x1="836" y1="730" x2="659" y2="730" stroke="#374151" stroke-width="1.6" marker-end="url(#arr)"/>
+  <text x="672" y="722" font-size="11" fill="#374151">⑪ 結果を OverseerDO へ返却（フロントへはストリーム配信）</text>
+
+  <!-- 区切り -->
+  <line x1="60" y1="762" x2="1440" y2="762" stroke="#D1D5DB" stroke-width="1"/>
+
+  <!-- ============ 提案フロー ============ -->
+  <text x="60" y="790" font-size="13" font-weight="700" fill="#1565C0">提案: エージェント定義（宣言的ファイル）によるツール制御・プロンプト注入</text>
+
+  <line x1="100" y1="815" x2="276" y2="815" stroke="#1565C0" stroke-width="1.6" stroke-dasharray="6 4" marker-end="url(#arrBlue)"/>
+  <text x="112" y="807" font-size="11" fill="#1565C0">P1 Agent タブで定義編集（prompts / skills / tools.enabled）</text>
+  <line x1="280" y1="860" x2="466" y2="860" stroke="#1565C0" stroke-width="1.6" stroke-dasharray="6 4" marker-end="url(#arrBlue)"/>
+  <text x="292" y="852" font-size="11" fill="#1565C0">P2 saveAgentDefinition（RPC）</text>
+  <line x1="470" y1="905" x2="651" y2="905" stroke="#1565C0" stroke-width="1.6" stroke-dasharray="6 4" marker-end="url(#arrBlue)"/>
+  <text x="482" y="897" font-size="11" fill="#1565C0">P3 定義を storage に保存（JSONC）</text>
+  <line x1="655" y1="940" x2="836" y2="940" stroke="#1565C0" stroke-width="1.6" stroke-dasharray="6 4" marker-end="url(#arrBlue)"/>
+  <text x="667" y="932" font-size="11" fill="#1565C0">P4 チャット開始時に定義を読み込み</text>
+
+  <rect x="855" y="955" width="165" height="48" rx="6" fill="#E3F2FD" stroke="#1976D2" stroke-width="1"/>
+  <line x1="840" y1="979" x2="1020" y2="979" stroke="#9CA3AF" stroke-width="0.8"/>
+  <text x="865" y="972" font-size="10" fill="#0D47A1">tools を定義の tools.enabled で</text>
+  <text x="865" y="986" font-size="10" fill="#0D47A1">フィルタ（現状⑥を置換）</text>
+
+  <rect x="665" y="955" width="165" height="44" rx="6" fill="#E3F2FD" stroke="#1976D2" stroke-width="1"/>
+  <line x1="655" y1="977" x2="830" y2="977" stroke="#9CA3AF" stroke-width="0.8"/>
+  <text x="675" y="972" font-size="10" fill="#0D47A1">prompts 断片を動的スロット</text>
+  <text x="675" y="986" font-size="10" fill="#0D47A1">（systemPromptSlots[1]）へ注入</text>
+
+  <text x="60" y="1020" font-size="11" fill="#4B5563">※ 定義の置き場所は OverseerDO の storage（ワークスペース 1 つ = 1 定義）。新 DO は不要。共有が必要になったら定義 ID キーの DO に分離（Blueprint と同じパターン）。</text>
+</svg>
