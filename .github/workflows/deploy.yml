@@ -1,0 +1,96 @@
+name: deploy
+
+# Deploys from GitHub (never from local):
+#   - push to main    -> production (os.cherie-lab.com, deployment.jsonc)
+#   - push to develop -> development (os-dev.cherie-lab.com, deployment.dev.jsonc)
+#   - manual dispatch with dry_run=true -> check only (tests + build + dry-run), no deploy
+#
+# The deploy.mjs script generates the per-worker wrangler configs (all KV/R2/service-binding
+# env vars included) from the deployment config, so this workflow just runs it. Secrets are
+# re-ensured on every deploy from GitHub Actions secrets.
+
+on:
+  push:
+    branches: [main, develop]
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Check only (tests + build + dry-run), no real deploy"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-${{ github.ref_name }}
+  cancel-in-progress: false
+
+env:
+  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+  CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: recursive
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: |
+          pnpm install
+          pnpm --dir cloudflare-os install
+
+      - name: Resolve deployment config by branch
+        id: cfg
+        run: |
+          if [ "${{ github.ref_name }}" = "main" ]; then
+            echo "config=deployment.jsonc" >> "$GITHUB_OUTPUT"
+            echo "workshop=cloudflare-os-workshop" >> "$GITHUB_OUTPUT"
+          else
+            echo "config=deployment.dev.jsonc" >> "$GITHUB_OUTPUT"
+            echo "workshop=cloudflare-os-workshop-dev" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check (tests + build + dry-run)
+        run: DEPLOYMENT_CONFIG=${{ steps.cfg.outputs.config }} pnpm run check
+
+      - name: Skip deploy in dry_run mode
+        if: ${{ inputs.dry_run }}
+        run: echo "dry_run mode — deploy skipped"
+
+      - name: Ensure worker secrets (idempotent)
+        if: ${{ !inputs.dry_run }}
+        env:
+          CF_AI_GATEWAY_API_TOKEN: ${{ secrets.CF_AI_GATEWAY_API_TOKEN }}
+          OPENCODE_GO_API_KEY: ${{ secrets.OPENCODE_GO_API_KEY }}
+        run: |
+          if [ -n "$CF_AI_GATEWAY_API_TOKEN" ]; then
+            printf '%s' "$CF_AI_GATEWAY_API_TOKEN" | pnpm exec wrangler secret put CF_AI_GATEWAY_API_TOKEN --name "${{ steps.cfg.outputs.workshop }}"
+          fi
+          if [ "${{ github.ref_name }}" = "main" ] && [ -n "$OPENCODE_GO_API_KEY" ]; then
+            printf '%s' "$OPENCODE_GO_API_KEY" | pnpm exec wrangler secret put OPENCODE_GO_API_KEY --name cloudflare-os-model-relay
+          fi
+
+      - name: Deploy workers (deploy.mjs generates configs + all bindings)
+        if: ${{ !inputs.dry_run }}
+        run: DEPLOYMENT_CONFIG=${{ steps.cfg.outputs.config }} pnpm deploy
+
+      # The model relay is shared by prod and dev (the AI Gateway routes to it), so it only
+      # deploys from main to keep a single source of truth.
+      - name: Deploy model relay (main only)
+        if: ${{ !inputs.dry_run && github.ref_name == 'main' }}
+        working-directory: relay
+        run: pnpm exec wrangler deploy
