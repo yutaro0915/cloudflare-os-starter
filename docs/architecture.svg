@@ -1,4 +1,10 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1500 720" font-family="system-ui, -apple-system, 'Hiragino Sans', 'Noto Sans JP', sans-serif">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1500 960" font-family="system-ui, -apple-system, 'Hiragino Sans', 'Noto Sans JP', sans-serif">
+  <!--
+    アーキテクチャ図 正本（更新していく図）
+    更新方法: この SVG を編集 → タイトルの日付を更新 →
+      qlmanage -t -s 1800 -o . architecture.svg（PNG 再生成）
+      （旧版は architecture-v1-2026-08-06.svg に保存）
+  -->
   <defs>
     <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
       <path d="M 0 0 L 10 5 L 0 10 z" fill="#374151"/>
@@ -6,123 +12,145 @@
     <marker id="arrGreen" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
       <path d="M 0 0 L 10 5 L 0 10 z" fill="#2E7D32"/>
     </marker>
-    <marker id="arrRed" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-      <path d="M 0 0 L 10 5 L 0 10 z" fill="#DC2626"/>
+    <marker id="arrBlue" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#1565C0"/>
     </marker>
   </defs>
 
   <!-- Title -->
-  <text x="750" y="34" text-anchor="middle" font-size="19" font-weight="700" fill="#111827">現在のアーキテクチャ — Cloudflare OS @ os.cherie-lab.com（2026-08-06・リレー構成）</text>
+  <text x="750" y="34" text-anchor="middle" font-size="19" font-weight="700" fill="#111827">Cloudflare OS ハブ アーキテクチャ — 現状 + 構想（2026-08-07 更新・v2）</text>
 
-  <!-- ============ Column 1: Clients ============ -->
-  <rect x="40" y="80" width="300" height="84" rx="8" fill="#E3F2FD" stroke="#1976D2" stroke-width="1.5"/>
-  <text x="54" y="106" font-size="14" font-weight="700" fill="#0D47A1">サークルメンバー</text>
-  <text x="54" y="126" font-size="12.5" fill="#1565C0">ブラウザから利用</text>
-  <text x="54" y="144" font-size="12.5" fill="#1565C0">キー設定不要（カタログ自動表示）</text>
+  <!-- ============ Band 1: 開発フロー ============ -->
+  <!-- GitHub -->
+  <rect x="40" y="70" width="420" height="130" rx="8" fill="#F3F4F6" stroke="#6B7280" stroke-width="1.5"/>
+  <text x="54" y="96" font-size="14" font-weight="700" fill="#111827">GitHub（private・正本・2026-08-06 運用開始）</text>
+  <text x="54" y="120" font-size="12.5" fill="#374151">yutaro0915/cloudflare-os-starter</text>
+  <text x="54" y="140" font-size="12" fill="#4B5563">・main（本番反映） / develop（開発統合）</text>
+  <text x="54" y="160" font-size="12" fill="#4B5563">└ submodule: cloudflare-os（fork f37b590）</text>
+  <text x="54" y="180" font-size="12" fill="#4B5563">upstream（Cloudflare 本家）追従可</text>
 
-  <rect x="40" y="196" width="300" height="84" rx="8" fill="#E3F2FD" stroke="#1976D2" stroke-width="1.5"/>
-  <text x="54" y="222" font-size="14" font-weight="700" fill="#0D47A1">admin（cherie）</text>
-  <text x="54" y="242" font-size="12.5" fill="#1565C0">パスワード方式サインイン</text>
-  <text x="54" y="260" font-size="12.5" fill="#1565C0">/admin でブランディング等を管理</text>
+  <!-- GitHub Actions -->
+  <rect x="540" y="70" width="380" height="130" rx="8" fill="#F3F4F6" stroke="#6B7280" stroke-width="1.5"/>
+  <text x="554" y="96" font-size="14" font-weight="700" fill="#111827">GitHub Actions（deploy.yml）</text>
+  <text x="554" y="118" font-size="11.5" fill="#4B5563">① checkout(--recurse-submodules)</text>
+  <text x="554" y="136" font-size="11.5" fill="#4B5563">② pnpm install（root + submodule）</text>
+  <text x="554" y="154" font-size="11.5" fill="#4B5563">③ pnpm run check（検証ゲート）</text>
+  <text x="554" y="172" font-size="11.5" fill="#4B5563">④ pnpm deploy（config 自動生成）</text>
+  <text x="554" y="190" font-size="11.5" fill="#4B5563">認証: CLOUDFLARE_API_TOKEN（GitHub secret）</text>
 
-  <!-- ============ Column 2: Cloudflare OS ============ -->
-  <rect x="420" y="80" width="380" height="70" rx="8" fill="#FFF3E0" stroke="#EF6C00" stroke-width="1.5"/>
-  <text x="434" y="106" font-size="14" font-weight="700" fill="#E65100">Cloudflare Edge</text>
-  <text x="434" y="126" font-size="12.5" fill="#E65100">os.cherie-lab.com（カスタムドメイン・DNS/TLS 自動）</text>
+  <!-- 構想中 -->
+  <rect x="1000" y="70" width="440" height="130" rx="8" fill="#E3F2FD" stroke="#1565C0" stroke-width="1.8" stroke-dasharray="7 5"/>
+  <text x="1014" y="96" font-size="14" font-weight="700" fill="#0D47A1">構想中（青破線 = まだ無いもの）</text>
+  <text x="1014" y="120" font-size="12" fill="#1565C0">・自動実装フロー: issue → エージェント →</text>
+  <text x="1026" y="138" font-size="12" fill="#1565C0">　PR → レビュー → マージ → CI がデプロイ</text>
+  <text x="1014" y="160" font-size="12" fill="#1565C0">・エージェントバンク（スキル・プロンプト共有）</text>
+  <text x="1014" y="180" font-size="12" fill="#1565C0">・searchWeb（AI Search 検索ツール）</text>
 
-  <rect x="420" y="190" width="380" height="230" rx="8" fill="#FFF8E1" stroke="#F57F17" stroke-width="1.5"/>
-  <text x="434" y="216" font-size="14.5" font-weight="700" fill="#B26A00">cloudflare-os-workshop（本体 Worker）</text>
-  <text x="434" y="240" font-size="12.5" fill="#7A4E00">・認証（パスワード方式、ADMINS=["cherie"]）</text>
-  <text x="434" y="260" font-size="12.5" fill="#7A4E00">・Durable Objects + SQLite（User / Workspace / Gadget）</text>
-  <text x="434" y="280" font-size="12.5" fill="#7A4E00">・モデルカタログ: deepseek-v4-flash を全ユーザーに自動表示</text>
-  <text x="434" y="300" font-size="12.5" fill="#7A4E00">・pi-ai 推論レイヤー</text>
-  <text x="434" y="328" font-size="12.5" font-weight="600" fill="#B26A00">シークレット（Worker 秘匿）:</text>
-  <text x="434" y="348" font-size="12" fill="#7A4E00">CF_AI_GATEWAY_API_TOKEN（ゲートウェイ用）</text>
-  <text x="434" y="366" font-size="12" fill="#7A4E00">deepseek キーはリレー Worker が保持（右）</text>
-  <text x="434" y="390" font-size="11.5" fill="#9A6A00">※ deepseek は ゲートウェイ→リレー→opencode.ai（緑）</text>
+  <!-- Band1 arrows -->
+  <line x1="460" y1="135" x2="536" y2="135" stroke="#374151" stroke-width="1.6" marker-end="url(#arr)"/>
+  <text x="468" y="126" font-size="11" fill="#374151">push</text>
+  <path d="M 660 200 L 660 232 L 350 232 L 350 256" fill="none" stroke="#374151" stroke-width="1.6" marker-end="url(#arr)"/>
+  <text x="396" y="224" font-size="11.5" fill="#374151">main → 本番デプロイ</text>
+  <path d="M 780 200 L 780 232 L 1030 232 L 1030 256" fill="none" stroke="#374151" stroke-width="1.6" marker-end="url(#arr)"/>
+  <text x="846" y="224" font-size="11.5" fill="#374151">develop → 開発デプロイ</text>
 
-  <rect x="420" y="460" width="190" height="96" rx="8" fill="#ECEFF1" stroke="#607D8B" stroke-width="1.5"/>
-  <text x="434" y="486" font-size="13.5" font-weight="700" fill="#37474F">ストレージ</text>
-  <text x="434" y="506" font-size="12" fill="#455A64">KV ×3</text>
-  <text x="434" y="524" font-size="12" fill="#455A64">（context / avatars / blueprints）</text>
-  <text x="434" y="542" font-size="12" fill="#455A64">R2（blueprint-content）</text>
+  <!-- ============ Band 2: 実行環境 ============ -->
+  <!-- 本番 -->
+  <rect x="40" y="260" width="680" height="330" rx="8" fill="#FFF3E0" stroke="#EF6C00" stroke-width="1.5"/>
+  <text x="56" y="288" font-size="14.5" font-weight="700" fill="#E65100">本番 — os.cherie-lab.com（deployment.jsonc）</text>
 
-  <rect x="640" y="460" width="160" height="96" rx="8" fill="#ECEFF1" stroke="#607D8B" stroke-width="1.5"/>
-  <text x="654" y="486" font-size="13.5" font-weight="700" fill="#37474F">補助 Worker</text>
-  <text x="654" y="506" font-size="11.5" fill="#455A64">cloudflare-os-context</text>
-  <text x="654" y="522" font-size="11.5" fill="#455A64">cloudflare-os-custom</text>
-  <text x="654" y="538" font-size="11.5" fill="#455A64">cloudflare-os-error-reporter</text>
+  <rect x="56" y="300" width="320" height="160" rx="8" fill="#FFF8E1" stroke="#F57F17" stroke-width="1.5"/>
+  <text x="70" y="324" font-size="13.5" font-weight="700" fill="#B26A00">cloudflare-os-workshop（本体 Worker）</text>
+  <text x="70" y="346" font-size="11.5" fill="#7A4E00">・認証（パスワード方式・ADMINS=["cherie"]）</text>
+  <text x="70" y="364" font-size="11.5" fill="#7A4E00">・DO + SQLite（User / Workspace / Gadget）</text>
+  <text x="70" y="382" font-size="11.5" fill="#7A4E00">・カタログ: deepseek-v4-flash 自動表示</text>
+  <text x="70" y="400" font-size="11.5" fill="#7A4E00">・pi-ai 推論 / エージェント（webFetch 等）</text>
+  <text x="70" y="424" font-size="11" font-weight="600" fill="#B26A00">シークレット:</text>
+  <text x="70" y="440" font-size="11" fill="#7A4E00">CF_AI_GATEWAY_API_TOKEN</text>
 
-  <!-- ============ Column 3: AI chain ============ -->
-  <rect x="1020" y="80" width="280" height="104" rx="8" fill="#FEF3C7" stroke="#D97706" stroke-width="1.5"/>
-  <text x="1034" y="106" font-size="14" font-weight="700" fill="#92400E">AI Gateway（cloudflare-os）</text>
-  <text x="1034" y="126" font-size="12" fill="#92400E">・カタログ設定の有効化</text>
-  <text x="1034" y="143" font-size="12" fill="#92400E">・Workers AI ルート（タイトル生成）</text>
-  <text x="1034" y="163" font-size="11.5" fill="#B45309">・opencode-go（base_url = リレー Worker）</text>
+  <rect x="392" y="300" width="312" height="160" rx="8" fill="#FFF8E1" stroke="#F57F17" stroke-width="1.5"/>
+  <text x="406" y="324" font-size="13.5" font-weight="700" fill="#B26A00">補助 Worker ×3</text>
+  <text x="406" y="346" font-size="11.5" fill="#7A4E00">cloudflare-os-context（Context Library）</text>
+  <text x="406" y="364" font-size="11.5" fill="#7A4E00">cloudflare-os-custom（custom-gatekeeper）</text>
+  <text x="406" y="382" font-size="11.5" fill="#7A4E00">cloudflare-os-error-reporter</text>
+  <text x="406" y="406" font-size="11" font-weight="600" fill="#B26A00">バインディング:</text>
+  <text x="406" y="424" font-size="11" fill="#7A4E00">Worker Loader / Browser Run / Workers AI</text>
+  <text x="406" y="442" font-size="11" fill="#7A4E00">GATEKEEPER_*（service bindings）</text>
 
-  <rect x="1020" y="240" width="280" height="90" rx="8" fill="#FFF8E1" stroke="#F57F17" stroke-width="1.5"/>
-  <text x="1034" y="266" font-size="14" font-weight="700" fill="#B26A00">リレー Worker</text>
-  <text x="1034" y="286" font-size="12" fill="#7A4E00">cloudflare-os-model-relay</text>
-  <text x="1034" y="304" font-size="12" fill="#7A4E00">opencode.ai へ直接 fetch（約 40 行）</text>
-  <text x="1034" y="321" font-size="12" fill="#7A4E00">シークレット: OPENCODE_GO_API_KEY</text>
+  <rect x="56" y="472" width="648" height="104" rx="8" fill="#ECEFF1" stroke="#607D8B" stroke-width="1.5"/>
+  <text x="70" y="496" font-size="13" font-weight="700" fill="#37474F">ストレージ（ID 固定・自動プロビジョン済み）</text>
+  <text x="70" y="518" font-size="11.5" fill="#455A64">KV ×3: context / avatars / blueprints（名前空間 ID を deployment.jsonc に固定）</text>
+  <text x="70" y="536" font-size="11.5" fill="#455A64">R2: blueprint-content　／　Durable Objects（User / Workspace / Gadget DO）</text>
 
-  <rect x="1020" y="380" width="280" height="80" rx="8" fill="#E8F5E9" stroke="#2E7D32" stroke-width="1.5"/>
-  <text x="1034" y="406" font-size="14" font-weight="700" fill="#1B5E20">opencode.ai（Go プラン）</text>
-  <text x="1034" y="426" font-size="12" fill="#2E7D32">https://opencode.ai/zen/go/v1</text>
-  <text x="1034" y="443" font-size="12" fill="#2E7D32">直接 fetch は成功（実証済み）</text>
+  <!-- 開発 -->
+  <rect x="780" y="260" width="680" height="330" rx="8" fill="#FFF8E1" stroke="#F57F17" stroke-width="1.5"/>
+  <text x="796" y="288" font-size="14.5" font-weight="700" fill="#B26A00">開発 — os-dev.cherie-lab.com（deployment.dev.jsonc）</text>
 
-  <rect x="1020" y="500" width="280" height="66" rx="8" fill="#E8F5E9" stroke="#2E7D32" stroke-width="1.5"/>
-  <text x="1034" y="526" font-size="14" font-weight="700" fill="#1B5E20">DeepSeek V4 Flash</text>
-  <text x="1034" y="546" font-size="12" fill="#2E7D32">全ユーザーのデフォルトモデル</text>
+  <rect x="796" y="300" width="320" height="160" rx="8" fill="#FFF8E1" stroke="#F57F17" stroke-width="1.5"/>
+  <text x="810" y="324" font-size="13.5" font-weight="700" fill="#B26A00">cloudflare-os-workshop-dev</text>
+  <text x="810" y="346" font-size="11.5" fill="#7A4E00">・Workers AI 無料カタログのみ（deepseek 不使用）</text>
+  <text x="810" y="364" font-size="11.5" fill="#7A4E00">・データ・リソースは完全分離（-dev 名義）</text>
+  <text x="810" y="382" font-size="11.5" fill="#7A4E00">・ダミーデータで見た目・ロジック確認</text>
+  <text x="810" y="406" font-size="11" font-weight="600" fill="#B26A00">シークレット:</text>
+  <text x="810" y="424" font-size="11" fill="#7A4E00">CF_AI_GATEWAY_API_TOKEN</text>
 
-  <!-- ============ Arrows (active) ============ -->
-  <!-- clients -> edge -->
-  <line x1="340" y1="122" x2="416" y2="115" stroke="#374151" stroke-width="1.6" marker-end="url(#arr)"/>
-  <text x="352" y="106" font-size="11" fill="#374151">HTTPS</text>
-  <line x1="340" y1="238" x2="416" y2="130" stroke="#374151" stroke-width="1.6" marker-end="url(#arr)"/>
-  <text x="348" y="190" font-size="11" fill="#374151">HTTPS</text>
+  <rect x="1132" y="300" width="312" height="160" rx="8" fill="#FFF8E1" stroke="#F57F17" stroke-width="1.5"/>
+  <text x="1146" y="324" font-size="13.5" font-weight="700" fill="#B26A00">補助 Worker ×3（-dev）</text>
+  <text x="1146" y="346" font-size="11.5" fill="#7A4E00">cloudflare-os-context-dev</text>
+  <text x="1146" y="364" font-size="11.5" fill="#7A4E00">cloudflare-os-custom-dev</text>
+  <text x="1146" y="382" font-size="11.5" fill="#7A4E00">cloudflare-os-error-reporter-dev</text>
+  <text x="1146" y="406" font-size="11" font-weight="600" fill="#B26A00">バインディング:</text>
+  <text x="1146" y="424" font-size="11" fill="#7A4E00">Worker Loader / Workers AI（同型）</text>
 
-  <!-- edge -> worker -->
-  <line x1="610" y1="150" x2="610" y2="186" stroke="#374151" stroke-width="1.6" marker-end="url(#arr)"/>
+  <rect x="796" y="472" width="648" height="104" rx="8" fill="#ECEFF1" stroke="#607D8B" stroke-width="1.5"/>
+  <text x="810" y="496" font-size="13" font-weight="700" fill="#37474F">ストレージ（dev 用・自動プロビジョン）</text>
+  <text x="810" y="518" font-size="11.5" fill="#455A64">KV / R2 は本番と別リソース（-dev 名義で作成済み）</text>
+  <text x="810" y="536" font-size="11.5" fill="#455A64">同一 Cloudflare アカウント → $5/月 据え置き</text>
 
-  <!-- worker -> storage -->
-  <line x1="500" y1="420" x2="500" y2="456" stroke="#374151" stroke-width="1.6" marker-end="url(#arr)"/>
-  <text x="452" y="442" font-size="11" fill="#374151">永続化</text>
-  <line x1="720" y1="420" x2="720" y2="456" stroke="#374151" stroke-width="1.6" marker-end="url(#arr)"/>
-  <text x="700" y="442" font-size="11" fill="#374151">バインディング</text>
+  <!-- ============ Band 3: モデルチェーン（共有） ============ -->
+  <rect x="40" y="640" width="300" height="130" rx="8" fill="#FEF3C7" stroke="#D97706" stroke-width="1.5"/>
+  <text x="54" y="664" font-size="14" font-weight="700" fill="#92400E">AI Gateway（cloudflare-os）</text>
+  <text x="54" y="684" font-size="11.5" fill="#92400E">・カタログ設定・利用ログ記録</text>
+  <text x="54" y="702" font-size="11.5" fill="#92400E">・Workers AI ルート（タイトル生成）</text>
+  <text x="54" y="720" font-size="11.5" fill="#92400E">・custom provider: opencode-go</text>
+  <text x="54" y="738" font-size="11" fill="#B45309">（base_url = リレー Worker / BYOK）</text>
 
-  <!-- worker -> gateway: title gen (black) -->
-  <path d="M 800 210 L 850 210 L 850 132 L 1016 132" fill="none" stroke="#374151" stroke-width="1.6" marker-end="url(#arr)"/>
-  <text x="812" y="202" font-size="11" fill="#374151">タイトル生成</text>
+  <rect x="400" y="640" width="300" height="130" rx="8" fill="#FFF8E1" stroke="#F57F17" stroke-width="1.5"/>
+  <text x="414" y="664" font-size="14" font-weight="700" fill="#B26A00">リレー Worker（共有）</text>
+  <text x="414" y="684" font-size="11.5" fill="#7A4E00">cloudflare-os-model-relay</text>
+  <text x="414" y="702" font-size="11.5" fill="#7A4E00">POST /v1/* のみ受理・エラー可視化</text>
+  <text x="414" y="726" font-size="11" font-weight="600" fill="#B26A00">シークレット:</text>
+  <text x="414" y="744" font-size="11" fill="#7A4E00">OPENCODE_GO_API_KEY（キー一元管理）</text>
 
-  <!-- worker -> gateway: deepseek chat (GREEN) -->
-  <path d="M 800 310 L 870 310 L 870 150 L 1016 150" fill="none" stroke="#2E7D32" stroke-width="2.4" marker-end="url(#arrGreen)"/>
-  <text x="806" y="292" font-size="12" font-weight="700" fill="#1B5E20">チャット推論</text>
-  <text x="806" y="306" font-size="11.5" fill="#2E7D32">（deepseek 経路）</text>
+  <rect x="760" y="640" width="300" height="130" rx="8" fill="#E8F5E9" stroke="#2E7D32" stroke-width="1.5"/>
+  <text x="774" y="664" font-size="14" font-weight="700" fill="#1B5E20">opencode.ai（Go プラン）</text>
+  <text x="774" y="684" font-size="11.5" fill="#2E7D32">https://opencode.ai/zen/go/v1</text>
+  <text x="774" y="702" font-size="11.5" fill="#2E7D32">リレー経由の直接 fetch で課金回避（実証済み）</text>
 
-  <!-- gateway -> relay (GREEN) -->
-  <line x1="1160" y1="184" x2="1160" y2="236" stroke="#2E7D32" stroke-width="2.4" marker-end="url(#arrGreen)"/>
+  <rect x="1120" y="640" width="320" height="130" rx="8" fill="#E8F5E9" stroke="#2E7D32" stroke-width="1.5"/>
+  <text x="1134" y="664" font-size="14" font-weight="700" fill="#1B5E20">DeepSeek V4 Flash</text>
+  <text x="1134" y="684" font-size="11.5" fill="#2E7D32">全ユーザーのデフォルトモデル</text>
+  <text x="1134" y="702" font-size="11.5" fill="#2E7D32">キー配布なし・カタログ自動表示</text>
 
-  <!-- relay -> opencode (GREEN) -->
-  <line x1="1160" y1="330" x2="1160" y2="376" stroke="#2E7D32" stroke-width="2.4" marker-end="url(#arrGreen)"/>
-
-  <!-- opencode -> deepseek (GREEN) -->
-  <line x1="1160" y1="460" x2="1160" y2="496" stroke="#2E7D32" stroke-width="2.4" marker-end="url(#arrGreen)"/>
-
-  <!-- ============ Abandoned path (RED dashed, right side) ============ -->
-  <path d="M 1300 120 L 1340 120 L 1340 420 L 1300 420" fill="none" stroke="#DC2626" stroke-width="1.8" stroke-dasharray="6 4" marker-end="url(#arrRed)"/>
-  <text x="1348" y="240" font-size="11" font-weight="700" fill="#B91C1C">✗ 不使用（旧構成）</text>
-  <text x="1348" y="258" font-size="10.5" fill="#DC2626">ゲートウェイが</text>
-  <text x="1348" y="273" font-size="10.5" fill="#DC2626">opencode を直接</text>
-  <text x="1348" y="288" font-size="10.5" fill="#DC2626">呼ぶと課金拒否</text>
+  <!-- Band3 arrows -->
+  <line x1="200" y1="590" x2="200" y2="636" stroke="#2E7D32" stroke-width="2.6" marker-end="url(#arrGreen)"/>
+  <text x="212" y="618" font-size="12" font-weight="700" fill="#1B5E20">本番: チャット推論（deepseek）</text>
+  <path d="M 860 590 L 860 626 L 300 626 L 300 636" fill="none" stroke="#374151" stroke-width="1.8" marker-end="url(#arr)"/>
+  <text x="866" y="612" font-size="11.5" fill="#374151">開発: Workers AI 無料モデル</text>
+  <line x1="340" y1="705" x2="396" y2="705" stroke="#2E7D32" stroke-width="2.4" marker-end="url(#arrGreen)"/>
+  <line x1="700" y1="705" x2="756" y2="705" stroke="#2E7D32" stroke-width="2.4" marker-end="url(#arrGreen)"/>
+  <line x1="1060" y1="705" x2="1116" y2="705" stroke="#2E7D32" stroke-width="2.4" marker-end="url(#arrGreen)"/>
 
   <!-- ============ Legend ============ -->
-  <rect x="420" y="620" width="820" height="76" rx="8" fill="#FAFAFA" stroke="#D1D5DB" stroke-width="1"/>
-  <text x="436" y="640" font-size="12" font-weight="700" fill="#374151">凡例</text>
-  <line x1="436" y1="660" x2="476" y2="660" stroke="#2E7D32" stroke-width="2.4" marker-end="url(#arrGreen)"/>
-  <text x="484" y="664" font-size="11.5" fill="#374151">緑実線: 稼働中（deepseek: ゲートウェイ→リレー→opencode.ai）</text>
-  <line x1="860" y1="660" x2="900" y2="660" stroke="#374151" stroke-width="1.6" marker-end="url(#arr)"/>
-  <text x="908" y="664" font-size="11.5" fill="#374151">黒実線: 稼働中（Workers AI・タイトル生成ほか）</text>
-  <line x1="436" y1="684" x2="476" y2="684" stroke="#DC2626" stroke-width="1.8" stroke-dasharray="6 4"/>
-  <text x="484" y="688" font-size="11.5" fill="#374151">赤破線: 不使用（旧構成: ゲートウェイ直接だと課金拒否）</text>
+  <rect x="40" y="820" width="900" height="78" rx="8" fill="#FAFAFA" stroke="#D1D5DB" stroke-width="1"/>
+  <text x="56" y="842" font-size="12" font-weight="700" fill="#374151">凡例</text>
+  <line x1="56" y1="862" x2="96" y2="862" stroke="#2E7D32" stroke-width="2.4" marker-end="url(#arrGreen)"/>
+  <text x="104" y="866" font-size="11.5" fill="#374151">緑実線: 稼働中（deepseek: ゲートウェイ → リレー → opencode.ai → DeepSeek）</text>
+  <line x1="56" y1="886" x2="96" y2="886" stroke="#374151" stroke-width="1.6" marker-end="url(#arr)"/>
+  <text x="104" y="890" font-size="11.5" fill="#374151">黒実線: 稼働中（push/デプロイ・開発の Workers AI ルート）</text>
+
+  <rect x="1000" y="820" width="440" height="78" rx="8" fill="#FAFAFA" stroke="#D1D5DB" stroke-width="1"/>
+  <text x="1016" y="842" font-size="12" font-weight="700" fill="#374151">更新履歴</text>
+  <text x="1016" y="862" font-size="11" fill="#4B5563">2026-08-07 v2: GitHub/CI・本番/開発・構想を追加</text>
+  <text x="1016" y="882" font-size="11" fill="#4B5563">2026-08-06 v1: リレー構成（architecture-v1-*.svg 参照）</text>
 </svg>
