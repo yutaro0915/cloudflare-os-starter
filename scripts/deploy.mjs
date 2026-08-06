@@ -394,9 +394,20 @@ function build(config) {
   run(["--dir", "cloudflare-os", "--filter", "@gadgets/workshop-backend", "build"]);
 }
 
+// First deploy of a NEW worker needs its required secrets supplied via --secrets-file (wrangler
+// refuses otherwise). DEPLOYMENT_SECRETS_FILE points at such a file (lines `NAME=value` or JSON).
+// Later deploys keep the secrets, so this is only needed on the very first deploy.
+function secretsFileArgs() {
+  return process.env.DEPLOYMENT_SECRETS_FILE
+    ? ["--secrets-file", process.env.DEPLOYMENT_SECRETS_FILE]
+    : [];
+}
+
 async function main() {
   requireSubmodule();
-  const config = await readDeployment(join(root, "deployment.jsonc"));
+  // DEPLOYMENT_CONFIG overrides the config file (e.g. deployment.dev.jsonc for the dev
+  // environment). Defaults to deployment.jsonc (production).
+  const config = await readDeployment(join(root, process.env.DEPLOYMENT_CONFIG || "deployment.jsonc"));
   const generated = generateConfigs(config, {
     workshop: await readJsonc(join(root, "cloudflare-os/packages/workshop-backend/wrangler.jsonc")),
     context: await readJsonc(join(root, "cloudflare-os/packages/gatekeeper-context/wrangler.jsonc")),
@@ -420,7 +431,7 @@ async function main() {
       join(root, "cloudflare-os/packages/gatekeeper-context"));
     run(["exec", "wrangler", "deploy", "--config", generatedName, ...deployArgs],
       join(root, "packages/custom-gatekeeper"));
-    run(["exec", "wrangler", "deploy", "--config", generatedName, ...deployArgs],
+    run(["exec", "wrangler", "deploy", "--config", generatedName, ...deployArgs, ...secretsFileArgs()],
       join(root, "cloudflare-os/packages/workshop-backend"));
   } finally {
     await Promise.all(Object.values(generatedPaths).map((path) => rm(path, { force: true })));

@@ -1,0 +1,62 @@
+{
+  // DEVELOPMENT deployment for the circle hub (separate from production os.cherie-lab.com).
+  // Same account, separate workers + resources + data. Costs stay within the $5 Workers Paid base.
+  // Deploy with: DEPLOYMENT_CONFIG=deployment.dev.jsonc pnpm run check && DEPLOYMENT_CONFIG=deployment.dev.jsonc pnpm deploy
+  "accountId": "495d8f7ad5d97ab5254043eda39ff698",
+
+  "workers": {
+    "workshop": {
+      "name": "cloudflare-os-workshop-dev",
+      "route": { "customDomain": "os-dev.cherie-lab.com" }
+    },
+    "context": { "name": "cloudflare-os-context-dev" },
+    "customGatekeeper": { "name": "cloudflare-os-custom-dev" },
+    "errorReporter": { "name": "cloudflare-os-error-reporter-dev" }
+  },
+
+  // Password sign-in (same as prod). Register username "cherie" to be admin here too.
+  "access": {
+    "admins": ["cherie"]
+  },
+
+  // Dev uses the free Workers AI catalog only (no DeepSeek quota consumption, no keys needed).
+  // The same account-level AI Gateway routes Workers AI; deepseek provider stays prod-only.
+  "aiGateway": {
+    "enabled": true,
+    "name": "cloudflare-os",
+    "accountId": "495d8f7ad5d97ab5254043eda39ff698",
+    "providers": ["cloudflare"],
+    "workersAi": { "mode": "gateway", "gateway": "cloudflare-os" }
+  },
+
+  "context": {
+    // Separate Context data namespace from production.
+    "sharingDomain": "development",
+    "kvNamespaceId": null
+  },
+
+  "customGatekeeper": {
+    "name": "Cherie Lab Dev",
+    "message": "Cherie Lab dev environment examples for Cloudflare OS agents."
+  },
+
+  "errorReporting": {
+    "enabled": true,
+    "environment": "development",
+    "release": null
+  },
+
+  // Auto-provisioned on the first dev deploy (separate from production resources).
+  "resources": {
+    "blueprintsKvNamespaceId": null,
+    "avatarsKvNamespaceId": null,
+    "blueprintContentBucket": null
+  },
+
+  "observability": {
+    "enabled": true,
+    "headSamplingRate": 1,
+    "logs": { "invocationLogs": false },
+    "traces": { "enabled": false, "headSamplingRate": 0.1 }
+  }
+}
