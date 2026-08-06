@@ -126,6 +126,9 @@
 2. フロントエンドでの DO 接続と UI の設定
 3. 最終的な動作
 
+### 実装計画
+詳細なタスクレベル計画 = **`docs/implementation-agent-definition.md`**（T1-T7・新セッションでそのまま着手可能）
+
 ### 設計（シーケンス図 `docs/agent-tools-sequence.svg` 参照）
 
 | # | 変更箇所 | 内容 |
