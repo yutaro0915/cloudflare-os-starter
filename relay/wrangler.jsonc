@@ -1,0 +1,12 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "cloudflare-os-model-relay",
+  "main": "src/index.js",
+  "compatibility_date": "2026-08-06",
+  "custom_domains": [
+    { "name": "relay.cherie-lab.com" }
+  ],
+  "observability": {
+    "enabled": true
+  }
+}

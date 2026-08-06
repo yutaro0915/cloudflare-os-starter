@@ -1,0 +1,94 @@
+{
+  // Cloudflare account that owns every Worker and provisioned resource.
+  // Find it: https://developers.cloudflare.com/fundamentals/account/find-account-and-zone-ids/
+  "accountId": "495d8f7ad5d97ab5254043eda39ff698",
+
+  // Worker names are permanent service identities. Keep them unique within the account.
+  // Reference: docs/customization.md#workers-and-routing
+  "workers": {
+    "workshop": {
+      "name": "cloudflare-os-workshop",
+
+      // Production: use a hostname in an active Cloudflare zone. Wrangler creates DNS and TLS.
+      // Evaluation: replace this with "route": { "workersDev": true }.
+      // https://developers.cloudflare.com/workers/configuration/routing/custom-domains/
+      "route": { "customDomain": "os.cherie-lab.com" }
+    },
+    "context": { "name": "cloudflare-os-context" },
+    "customGatekeeper": { "name": "cloudflare-os-custom" },
+    "errorReporter": { "name": "cloudflare-os-error-reporter" }
+  },
+
+  // Sign-in: this deployment uses Cloudflare OS's built-in password accounts (upstream default,
+  // no Cloudflare Access required). To switch to Cloudflare Access sign-in, add "issuer" and
+  // "audience" below (see docs/customization.md#sign-in-methods).
+  // "admins" gates /admin in every sign-in method.
+  // Reference: docs/customization.md#sign-in-methods
+  "access": {
+    // Password sign-in (upstream default): omit issuer/audience and Cloudflare OS serves its own
+    // username + password accounts. Set both (issuer + audience) to switch to Cloudflare Access sign-in.
+    // NOTE: in password mode, admins are matched by the registered USERNAME (emails can't be
+    // usernames — signup allows only [a-z0-9_-]). Register with username "cherie" to be admin.
+    // "admins" gates /admin in every sign-in method.
+    // Reference: docs/customization.md#sign-in-methods
+    "admins": ["cherie"]
+  },
+
+  // Optional platform-funded model catalog. Leave disabled to deploy without AI setup.
+  // When enabled, replace every placeholder and install CF_AI_GATEWAY_API_TOKEN separately.
+  // Reference: docs/customization.md#ai-models
+  "aiGateway": {
+    // Deployment-funded model catalog: DeepSeek V4 Flash via the account's AI Gateway custom
+    // provider "opencode-go" (upstream https://opencode.ai/zen/go). CF_AI_GATEWAY_API_TOKEN is a
+    // required secret on the workshop worker (AI Gateway Run + Read). Users need no API keys.
+    // Reference: docs/customization.md#ai-models
+    "enabled": true,
+    "name": "cloudflare-os",
+    "accountId": "495d8f7ad5d97ab5254043eda39ff698",
+    "providers": ["deepseek"],
+
+    // "direct" sends Workers AI to its REST endpoint. "gateway" adds AI Gateway logs.
+    "workersAi": { "mode": "gateway", "gateway": "cloudflare-os" }
+  },
+
+  "context": {
+    // Isolates Context data shared by this Workshop deployment.
+    "sharingDomain": "production",
+
+    // Existing KV namespace provisioned on the first deploy.
+    "kvNamespaceId": "102b55a6c5e14538a217fc80ec2ded52"
+  },
+
+  // Displayed to agents when the example custom integration is enabled in /admin.
+  // Reference: docs/customization.md#custom-gatekeepers
+  "customGatekeeper": {
+    "name": "Cherie Lab",
+    "message": "Cherie Lab's internal knowledge and examples for Cloudflare OS agents."
+  },
+
+  // Explicit backend issue reports go to a private Worker that emits structured console errors.
+  // Set release to a commit/version when your deployment pipeline has one.
+  // Reference: docs/observability.md#quick-start
+  "errorReporting": {
+    "enabled": true,
+    "environment": "production",
+    "release": null
+  },
+
+  // Existing resources provisioned on the first deploy (KV created, R2 bucket created manually).
+  // https://developers.cloudflare.com/workers/wrangler/configuration/#automatic-provisioning
+  "resources": {
+    "blueprintsKvNamespaceId": "47d7a00d449e4853b443ec2509929254",
+    "avatarsKvNamespaceId": "2dcad78a0832486f9ddebf2d85ca2c29",
+    "blueprintContentBucket": "cloudflare-os-workshop-blueprint-content"
+  },
+
+  // Structured custom logs stay enabled. Invocation logs and traces are separate volume controls.
+  // https://developers.cloudflare.com/workers/observability/logs/workers-logs/
+  "observability": {
+    "enabled": true,
+    "headSamplingRate": 1,
+    "logs": { "invocationLogs": false },
+    "traces": { "enabled": false, "headSamplingRate": 0.1 }
+  }
+}
