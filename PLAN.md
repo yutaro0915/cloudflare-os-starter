@@ -99,9 +99,49 @@
 
 ---
 
+## 調査メモ: 認証まわり（2026-08-07・保留）
+
+- 現状: パスワード方式。保存は **SHA-256 二重ハッシュ**（ソルトなし・KDF なし・2FA なし）。サインアップは /admin → Access で OFF 可能（未実施）
+- 懸念: パスワード保存が弱い / 誰でもアカウント作成できる
+- 選択肢:
+  - A: サインアップ OFF（即効・無リスク）
+  - B: Cloudflare Access サインイン（issuer/audience 設定・標準機能）。IdP 候補: Email OTP（低コスト）/ GitHub（org なし → 個別メール allowlist）/ Discord（カスタム OIDC、実測で discovery OK）
+  - C: Discord「サーバー部員限定」は OIDC だけでは不可（bot メンバー検証が必要 = DIY・将来課題）
+- 制約: GitHub org なし / **認証切替は既存アカウントデータ引き継ぎ不可**（username キー → email キー）→ 部員公開前が最後の移行チャンス
+- 決定: **保留**。ハッカソン 2 日前のためデモを壊さない優先。ハッカソン後・部員公開前に再検討
+
 ## 決済事項（確定済み）
 
 - [x] デモの主役 = **B: コア デモ（issue→自動PR→デプロイ 1 サイクル）+ エージェントバンク MVP の二本立て**（2026-08-06 選択）
 - [x] GitHub repo は private で進める
 - [x] dev 環境は同じアカウントの 2 つ目のデプロイ（os-dev.cherie-lab.com）
 - [ ] 目玉カスタムは a) searchWeb / b) ブランディング / c) 共有ワークスペース のどれ？（Day1 夜までに決定）
+
+---
+
+## 構想: ワークスペース単位の宣言的エージェント定義（2026-08-07・計画済み・期間見積もりなし・ハッカソン後候補）
+
+### 目的
+ハーネス / プロンプト / スキル / ツール制御を TypeScript コードから分離し、**宣言的な定義ファイル**としてワークスペースごとに管理。UI タブで編集し、ランタイムが読み込む。
+
+### 設計（シーケンス図 `docs/agent-tools-sequence.svg` 参照）
+
+| # | 変更箇所 | 内容 |
+|---|---|---|
+| 1 | **workshop-shared** | `AgentDefinition` 型 + CRUD RPC（get / save / reset）。形式 JSONC。フィールド: `prompts[]` / `skills[]` / `model?` / `tools.enabled[]` |
+| 2 | **overseer.ts（OverseerDO）** | 定義を storage に保存（ワークスペース 1 つ = 1 定義）。API + バリデーション |
+| 3 | **agent.ts** | ①buildAgent 時に定義を読み込み ②**tools を `definition.tools` でフィルタ**（spawnerConfig 分岐 @2834 と同じ機構）③prompts 断片を**動的スロット**（systemPromptSlots[1]）に注入（静的スロットは汚さない）④skills はまず「断片展開 + Context コレクション参照」 |
+| 4 | **server.ts** | RPC ルート追加 |
+| 5 | **workshop-frontend** | 「Agent」タブ（エディタ + プレビュー + リセット） |
+| 6 | **テスト** | バリデーション + フィルタのユニットテスト / ビルド担保 |
+
+### 設計の要（既存機構の再利用）
+- **ツール制御は spawnerConfig と同じ機構**（agent.ts:2834 に実績）→ 新発明しない
+- **プロンプトは動的スロット注入**（systemPromptSlots[1]）→ プロンプトキャッシュ維持
+- **定義は OverseerDO の storage**（新 DO 不要）→ 共有が必要になったら定義 ID キーの DO に分離（Blueprint と同じパターン）
+- **スキルは 3 段階**: 断片 → Context コレクション参照 → ツール化（後）
+
+### 正直な注意
+- 4 層に触れる（shared / backend / server / frontend）。kernel（agent.ts）も触る
+- ただし既存機構の延長（フィルタ + スロット注入）なので upstream 追従とのコンフリクトは小さく済む見込み
+- ハッカソン後のプロジェクト候補
