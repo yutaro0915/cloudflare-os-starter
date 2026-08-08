@@ -1,0 +1,59 @@
+name: bump-submodule
+
+# Advances the cloudflare-os gitlink when the OS repo's merge train (or a manual
+# dispatch) reports a new SHA. Since main only accepts PRs, the bump lands as a
+# pull request into main; merging it (human action) triggers deploy.yml -> production.
+# The push is authenticated with REPO_SYNC_TOKEN (fine-grained PAT) — a GITHUB_TOKEN
+# push would NOT trigger downstream workflows.
+
+on:
+  repository_dispatch:
+    types: [submodule-bump]
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: cloudflare-os commit SHA (defaults to tip of its default branch)
+        required: false
+
+concurrency:
+  group: bump-submodule
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  bump:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: main
+          token: ${{ secrets.REPO_SYNC_TOKEN }}
+
+      - name: Bump gitlink and open PR
+        env:
+          GH_TOKEN: ${{ secrets.REPO_SYNC_TOKEN }}
+        run: |
+          SHA="${{ github.event.client_payload.sha || github.event.inputs.sha }}"
+          if [ -z "$SHA" ]; then
+            DEFAULT=$(gh api repos/yutaro0915/cloudflare-os --jq .default_branch)
+            SHA=$(gh api "repos/yutaro0915/cloudflare-os/branches/$DEFAULT" --jq .commit.sha)
+          fi
+          CURRENT=$(git rev-parse :cloudflare-os)
+          if [ "$CURRENT" = "$SHA" ]; then
+            echo "gitlink already at $SHA; nothing to do."
+            exit 0
+          fi
+          BRANCH="bump/cloudflare-os-${SHA:0:7}"
+          git config user.name "merge-train[bot]"
+          git config user.email "merge-train@users.noreply.github.com"
+          git checkout -b "$BRANCH"
+          git update-index --cacheinfo 160000,"$SHA",cloudflare-os
+          git commit -m "chore: bump cloudflare-os to ${SHA:0:7} (auto via merge train)"
+          git push origin "$BRANCH"
+          gh pr create --base main --head "$BRANCH" \
+            --title "chore: bump cloudflare-os to ${SHA:0:7}" \
+            --body "Automated gitlink bump from the cloudflare-os merge train. Merging deploys to production (with the environment approval gate)."
