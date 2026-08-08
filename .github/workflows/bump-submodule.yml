@@ -42,6 +42,13 @@ jobs:
             DEFAULT=$(gh api repos/yutaro0915/cloudflare-os --jq .default_branch)
             SHA=$(gh api "repos/yutaro0915/cloudflare-os/branches/$DEFAULT" --jq .commit.sha)
           fi
+          # Norm (cloudflare-os rubrics/flow.md): the gitlink may only pin an ancestor
+          # of cloudflare-os main — the production ledger never points off-trunk.
+          STATUS=$(gh api "repos/yutaro0915/cloudflare-os/compare/main...$SHA" --jq .status)
+          if [ "$STATUS" != "identical" ] && [ "$STATUS" != "behind" ]; then
+            echo "::error::$SHA is not on cloudflare-os main (compare status: $STATUS); refusing to pin."
+            exit 1
+          fi
           CURRENT=$(git rev-parse :cloudflare-os)
           if [ "$CURRENT" = "$SHA" ]; then
             echo "gitlink already at $SHA; nothing to do."
