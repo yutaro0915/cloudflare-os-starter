@@ -34,6 +34,9 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    # Human gate: main (production) deploys wait for manual approval in the GitHub UI
+    # (Settings > Environments > production, required reviewer). develop deploys run unattended.
+    environment: ${{ github.ref_name == 'main' && 'production' || 'development' }}
     steps:
       - uses: actions/checkout@v6
         with:
