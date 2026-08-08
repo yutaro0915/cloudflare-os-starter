@@ -106,7 +106,7 @@
       **要 secret `REPO_SYNC_TOKEN`**（fine-grained PAT、starter の Contents: RW。
       両 repo に登録。未設定の間は dispatch を skip し手動 bump）。
       検証: PR #5（docs-only smoke test）が labeled → train → CI GREEN → 自動マージ。
-      教訓: `run: |` 内の複数行コメント本文はインデック必須（YAML block scalar 切断で
+      教訓: `run: |` 内の複数行コメント本文はインデント必須（YAML block scalar 切断で
       workflow 全体が起動時失敗になった → printf 単一行方式へ、actionlint を事前実行）
 - [ ] **Phase 2 残**: REPO_SYNC_TOKEN 登録（ユーザー）、conflict 経路（needs-rebase →
       @claude reconciler）の実弾検証、日次ディスパッチ回数上限
