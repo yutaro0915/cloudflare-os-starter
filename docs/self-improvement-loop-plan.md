@@ -73,7 +73,18 @@
       private submodule の clone 不可 + pnpm 二重指定で、public 化 + packageManager 準拠で解消）、
       本番ゲート = GitHub Environment `production`（required reviewer: yutaro0915。main deploy は
       承認待ち `waiting` になることを確認）。
-      残: claude-code-action 導入（`/install-github-app`、
+      **完了（2026-08-08）**: claude-code-action 導入済み。workflow 3 分割 =
+      claude.yml（@claude メンション）/ claude-fix.yml（agent-fix ラベル → 実装 → PR 自動作成）/
+      claude-review.yml（develop 向け PR 自動レビュー、allowed_bots: claude）。
+      通し 2 サイクル成功（issue #1 → PR #2、issue #3 → PR #4。自動実装・自動 PR・自動レビュー・
+      CI GREEN・マージ・dev 自動デプロイ）。develop へのマージはエージェント可
+      （2026-08-08 ユーザー明示許可）、main は人間のみ。
+      **CI エージェントハーネス**: `.github/agents/`（HARNESS.md + rubrics/fix,review +
+      playbooks/verify,repro-playwright + skills/playwright-repro）。ローカル clone では
+      何も自動読込されない設計（root AGENTS.md は upstream のローカル用、`.claude/` は
+      gitignore、skill は workflow が runner 上でのみ .claude/skills へ materialize）。
+      レビュー資産の還流 = rule of two（同種指摘 2 回で rubric へ追記 PR）を rubric に明記。
+      旧記述: claude-code-action 導入（`/install-github-app`、
       アカウント承認が必要）+ CI workflow（tsc/vitest/build）+ develop push → dev 自動デプロイ
       （repository_dispatch で starter へ連携）。手動 issue → 自動 PR → 手動マージ → 自動デプロイ
       が通ることを確認。issue テンプレート（再現手順・期待/実際・環境）もここで作成
