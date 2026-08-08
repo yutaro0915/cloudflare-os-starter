@@ -1,0 +1,81 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1500 960" font-family="system-ui, -apple-system, 'Hiragino Sans', 'Noto Sans JP', sans-serif">
+  <!-- 解説用: Gadget の共有機構 vs Agent/Skill の仕組み（2026-08-07） -->
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#374151"/>
+    </marker>
+    <marker id="arrBlue" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#1565C0"/>
+    </marker>
+  </defs>
+
+  <text x="750" y="34" text-anchor="middle" font-size="19" font-weight="700" fill="#111827">Gadget の共有機構 vs Agent/Skill の仕組み（2026-08-07・解説図）</text>
+
+  <!-- ============ Left column: Gadget sharing ============ -->
+  <text x="56" y="72" font-size="14.5" font-weight="700" fill="#E65100">① Gadget（実行可能なアプリ）の共有 — 実装済み</text>
+
+  <rect x="40" y="90" width="680" height="110" rx="8" fill="#FFF3E0" stroke="#EF6C00" stroke-width="1.5"/>
+  <text x="54" y="116" font-size="14" font-weight="700" fill="#E65100">Gadget（アプリの実体）</text>
+  <text x="54" y="138" font-size="12" fill="#7A4E00">Workspace DO（オーナー所有）</text>
+  <text x="54" y="156" font-size="12" fill="#7A4E00">コード + データ + AI 会話履歴（すべて 1 つの DO に同居）</text>
+  <text x="54" y="174" font-size="12" fill="#7A4E00">例: LT スライドアプリ・名簿ツールなど</text>
+
+  <rect x="40" y="220" width="680" height="200" rx="8" fill="#E3F2FD" stroke="#1976D2" stroke-width="1.5"/>
+  <text x="54" y="246" font-size="13.5" font-weight="700" fill="#0D47A1">共有方式 A: Collaborators（共同作業・実体へのアクセス共有）</text>
+  <text x="54" y="270" font-size="12" fill="#1565C0">招待: 直接追加（ユーザー名） ／  #share= リンク（128-bit 秘密鍵・HMAC のみ保存）</text>
+  <text x="54" y="290" font-size="12" fill="#1565C0">役割: build（編集・AI・接続管理） / use（UI 操作のみ）</text>
+  <text x="54" y="310" font-size="12" fill="#1565C0">権限グラフ: オーナーを根とした伝播 → 連鎖失効・undo 可（遅延失効モデル）</text>
+  <text x="54" y="330" font-size="12" fill="#1565C0">共同作業者同士でも接続アカウント・モデル課金は個人単位で分離</text>
+  <text x="54" y="354" font-size="11.5" font-weight="600" fill="#0D47A1">共有されるもの = 実行体（コード + データ + 会話）へのアクセス</text>
+  <text x="54" y="374" font-size="11.5" fill="#1565C0">※ 所有者は消せない・自分のモデル/接続を使う（build の注意点）</text>
+
+  <rect x="40" y="440" width="680" height="200" rx="8" fill="#E3F2FD" stroke="#1976D2" stroke-width="1.5"/>
+  <text x="54" y="466" font-size="13.5" font-weight="700" fill="#0D47A1">共有方式 B: Blueprints（コードスナップショットの配布）</text>
+  <text x="54" y="490" font-size="12" fill="#1565C0">Gadget エディタ → Blueprint ボタン → 公開 → /blueprint/xxxx リンク</text>
+  <text x="54" y="510" font-size="12" fill="#1565C0">開いた人が複製 → 完全に独立した新しい Gadget を作れる</text>
+  <text x="54" y="530" font-size="12" fill="#1565C0">ストレージ: R2（.gadget アーカイブ）+ KV（メタデータ）</text>
+  <text x="54" y="550" font-size="12" fill="#1565C0">管理: Blueprints タブ / Explore（探す）/ admin が Formats に昇格（標準メニュー化）</text>
+  <text x="54" y="574" font-size="11.5" font-weight="600" fill="#0D47A1">共有されるもの = コードのコピー元（データ・会話は共有しない）</text>
+  <text x="54" y="594" font-size="11.5" fill="#1565C0">※ .gadget ファイルで別インスタンスへ移行も可</text>
+
+  <!-- ============ Right column: Agent/Skill ============ -->
+  <text x="796" y="72" font-size="14.5" font-weight="700" fill="#1B5E20">② Agent / Skill の仕組み — 実装済み（共有は未実装）</text>
+
+  <rect x="780" y="90" width="680" height="150" rx="8" fill="#E8F5E9" stroke="#2E7D32" stroke-width="1.5"/>
+  <text x="794" y="116" font-size="14" font-weight="700" fill="#1B5E20">AgentDefinition（エージェントの「設定」）</text>
+  <text x="794" y="140" font-size="12" fill="#2E7D32">・modelId — このエージェントが使うモデル</text>
+  <text x="794" y="158" font-size="12" fill="#2E7D32">・AGENTS.md — システムプロンプトへ追記する指示（全文）</text>
+  <text x="794" y="176" font-size="12" fill="#2E7D32">・SKILL.md 配列 — frontmatter 付きの完全なスキル文書</text>
+  <text x="794" y="194" font-size="12" fill="#2E7D32">・tools — 有効/無効のツール制約</text>
+  <text x="794" y="214" font-size="11.5" fill="#4CAF50">※ 実行コードは持たない。「指示テキスト + モデル + 制約」の定義体</text>
+
+  <rect x="780" y="260" width="680" height="90" rx="8" fill="#E8F5E9" stroke="#2E7D32" stroke-width="1.5"/>
+  <text x="794" y="286" font-size="13.5" font-weight="700" fill="#1B5E20">保存場所: 自分の User DO（アカウント単位）</text>
+  <text x="794" y="308" font-size="12" fill="#2E7D32">agentDefinitions collection（primaryKey: id）</text>
+  <text x="794" y="326" font-size="12" fill="#2E7D32">保存時に検証: 構造 / YAML frontmatter / モデル存在</text>
+
+  <rect x="780" y="370" width="680" height="200" rx="8" fill="#E8F5E9" stroke="#2E7D32" stroke-width="1.5"/>
+  <text x="794" y="396" font-size="13.5" font-weight="700" fill="#1B5E20">新規会話フロー（スナップショット方式）</text>
+  <text x="794" y="420" font-size="12" fill="#2E7D32">① ホーム/ワークスペースのピッカーで選択（Agents / Models）</text>
+  <text x="794" y="440" font-size="12" fill="#2E7D32">② getChatContext(modelId, agentId) が User DO から定義を取得</text>
+  <text x="794" y="460" font-size="12" fill="#2E7D32">③ モデルを解決して定義を chatContext へスナップショット</text>
+  <text x="794" y="480" font-size="12" fill="#2E7D32">④ 以後のランタイムはスナップショットの AGENTS.md + tools を適用</text>
+  <text x="794" y="504" font-size="11.5" font-weight="600" fill="#1B5E20">保存後の定義変更は既存会話に影響しない（会話は「その時」の定義で固定）</text>
+  <text x="794" y="524" font-size="11.5" fill="#4CAF50">※ 旧ワークスペース内 Agent 設定 UI は削除済み（ここに一本化）</text>
+
+  <rect x="780" y="590" width="680" height="140" rx="8" fill="#E3F2FD" stroke="#1565C0" stroke-width="1.8" stroke-dasharray="7 5"/>
+  <text x="794" y="616" font-size="13.5" font-weight="700" fill="#0D47A1">将来: 共有化（未実装・技術的には可能）</text>
+  <text x="794" y="640" font-size="12" fill="#1565C0">・共有レジストリ DO + public スナップショット（Context Library と同じパターン）</text>
+  <text x="794" y="660" font-size="12" fill="#1565C0">・共有定義を自分の DO に import（copy-on-import）</text>
+  <text x="794" y="680" font-size="12" fill="#1565C0">・既存のスナップショット機構がそのまま使える（無理が無い）</text>
+  <text x="794" y="700" font-size="12" fill="#1565C0">・ポリシー: admin 管理 or ユーザー公開 + 承認（前例あり）</text>
+
+  <!-- ============ Bottom: 対比 ============ -->
+  <rect x="40" y="760" width="1420" height="110" rx="8" fill="#FAFAFA" stroke="#D1D5DB" stroke-width="1.5"/>
+  <text x="56" y="786" font-size="14" font-weight="700" fill="#374151">対比: 何が共有されるのか</text>
+  <text x="56" y="810" font-size="12.5" fill="#374151">Gadget = 「実行体」（コード + データ + 会話が 1 つの DO） → 共有 = 実体へのアクセス（Collaborators） or コードの複製（Blueprints）</text>
+  <text x="56" y="832" font-size="12.5" fill="#374151">Agent = 「設定体」（指示テキスト + モデル + 制約） → 共有 = 定義の複製・参照（現状 per-user・共有レイヤー未実装）</text>
+  <text x="56" y="856" font-size="12.5" font-weight="600" fill="#1565C0">つまり「agent/skill を gadget のように共有する」は未実装だが、同じ OS 内に Context の private/public 前例があり自然に足せる</text>
+
+  <text x="56" y="926" font-size="11" fill="#9CA3AF">凡例: オレンジ = Gadget 実体 / 青 = 共有機構（実装済み） / 緑 = Agent・Skill（実装済み） / 青破線 = 将来（未実装）</text>
+</svg>

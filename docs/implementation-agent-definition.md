@@ -1,227 +1,144 @@
-# 実装計画: エージェントシステム再編（宣言的エージェント定義）
+# 実装計画・結果: Agents / Skills / Tools
 
 - 作成: 2026-08-07
-- 状態: 実装済み・dev 検証済み（2026-08-07）
-- 正本: このファイル。シーケンス図 = `docs/agent-tools-sequence.svg`（現状 + 提案の流れ）
+- 更新: 2026-08-08
+- 状態: 実装・ローカル検証・dev 配備完了
+- 対象: `cloudflare-os/` submodule
 
----
+## 1. 目的
 
-## 0. 新セッションへの引き継ぎ情報
+ユーザーが再利用可能な Agent と Skill をアカウント単位で定義・保管し、新しい会話を始めるときに通常のモデルまたはカスタム Agent を選べるようにする。
 
-- プロジェクト場所: `~/LLMWiki/projects/cloudflare-os-hub`
-- リポジトリ: starter = `yutaro0915/cloudflare-os-starter`（main/develop、ローカルは main チェックアウト）/ submodule = `yutaro0915/cloudflare-os`（fork、f37b590、**ローカルブランチ main/develop が f37b590 を指す・HEAD は detached**）
-- リモート: origin = 自分のフォーク / upstream = Cloudflare 本家（追従用）
-- 変更対象はすべて **submodule（cloudflare-os/packages/**）内。starter はデプロイ検証のみ
-- ビルド/検証: submodule ルートで `pnpm types:check` / `pnpm test`（変更関連のみ）/ `pnpm build`。starter ルートで `pnpm run check`（テスト+ビルド+dry-run）
-- 注意: vitest フルスイートは既知の 6 ファイル収集失敗あり → **変更関連のテストファイルのみ**を回す運用（`pnpm --filter workshop-backend test -- <file>` 等）
-- 本番 `os.cherie-lab.com` / dev `os-dev.cherie-lab.com` 稼働中（同一アカウント・$5）。dev デプロイ = `DEPLOYMENT_CONFIG=deployment.dev.jsonc pnpm deploy`
-- 秘密情報は GitHub Actions secrets / Worker secrets にあり。コード変更に secret は不要
+管理 UI は会話中の設定ではなく、サイドバー末尾の独立した `Agents`、`Skills`、`Tools` に置く。Skill は Codex / Claude Code 型の `SKILL.md` として保存し、pi にはメタデータを先に提示して、必要時だけ全文を読み込ませる。
 
----
+## 2. 確定仕様
 
-## 1. 概要
+### 2.1 画面
 
-ワークスペースごとの「宣言的エージェント定義」を導入する。エージェントのツール・プロンプトを TypeScript コード（agent.ts 内ハードコード）から分離し、ワークスペース単位の定義（JSONC）として管理・UI から編集できるようにする。ランタイム（agent.ts）は定義を読み込んで適用する。
+サイドバーの主要メニュー末尾は、上から次の順とする。
 
-やること（ユーザー指示）:
-1. バックエンドのエージェントシステム再編
-2. フロントエンドでの DO 接続と UI の設定
-3. 最終的な動作
+1. `Agents`
+2. `Skills`
+3. `Tools`
 
----
+- `/agents`: 保存済み Agent の一覧と編集、右側に Agent 専用 Preview。
+- `/skills`: frontmatter 付き完全な `SKILL.md` の一覧、検証、保存、削除。
+- `/tools`: backend 登録済み tool の一覧、説明、入力契約、JSON 入力の契約検証。
+- Skill と Tool に会話 Preview は設けない。実ランタイムでの組み合わせは Agent Preview で試す。
+- Home と Workspace の新規会話ピッカーでは、通常モデルまたは保存済み Agent を選択できる。
 
-## 2. 前提知識（現状の仕組み・必読）
+### 2.2 保存形式
 
-### 2.1 RPC 層
-- フロント ⇄ バックエンドは capnweb RPC（WebSocket /api）。型の正本は `workshop-shared/src/api.ts`（約 2,900 行）
-- 公開面: `PublicApi`（@44・未認証）/ `AuthenticatedApi`（@289・認証済み）/ `AdminApi`（@750）/ **`Overseer`（@1297・ワークスペース DO の RPC 面）**
-- DO クラスのメソッドは capnweb の RpcTarget なので、**OverseerImpl にメソッドを足すと自動で RPC 公開される**（server.ts 経由の明示ルートは不要な場合が多い。ただし公開面の型は workshop-shared に追加が必要）
-
-### 2.2 DO パターン
-- `OverseerDurableObject`（overseer.ts @6290）は `OverseerImpl` をラップ。storage は typed-storage（`@gadgets/typed-storage`）:
-  `this.impl.storage.code.put({...})` のような形
-- DO クラスは `ctx.exports` 経由（wrangler に明示 binding 不要）
-
-### 2.3 エージェント（agent.ts）
-- ツール定義: `let tools: Record<string, AgentTool>` @2307。`defineTool({name, label, description, parameters, execute})` 形式。既存ツール: readFile / writeFile / editFile / webFetch / observeUserChanges / describeBinding / setGadgetBinding / createGadget / listBlueprints / executeCode / listConnectableResources / requestConnection（+ 条件付き giveUp @2817）
-- **既存のツール絞り込み** @2834:
-  ```ts
-  if (agentContext.spawnerConfig) {
-    tools = { describeBinding: tools.describeBinding, executeCode: tools.executeCode,
-              ...(callbackInitiated ? {giveUp: tools.giveUp} : {}) };
-  }
-  let toolList = Object.values(tools);
-  ```
-- システムプロンプト: `SYSTEM_PROMPT` @377 / `SPAWNER_SYSTEM_PROMPT` @524 / **2 スロット組立** @2056-2100:
-  - `instanceInstructions = formatInstanceInstructions(await hooks.getInstanceInstructions())`（/admin のエージェント指示）
-  - `systemPromptSlots[0]` = 静的（キャッシュ維持）/ `[1]` = 動的。**定義の prompts は動的スロット [1] に注入する（静的を汚さない）**
-- hooks: `interface AgentHooks` @232。`getInstanceInstructions()` @321。**`getAgentDefinition()` をここに追加し、実装は呼び出し側（overseer 側）が提供**
-- 注入: `runAgentLoopContinue(context, ...)` の `context.tools = toolList` @3033
-
-### 2.4 フロントエンド
-- TanStack Router file-based routing。`src/routes/*.tsx`。グローバルナビ = `src/components/AppShell/Sidebar.tsx`（Home / Workspaces / Blueprints / Outputs / 動的 gatekeeper apps）
-- ワークスペース UI = `src/routes/workspace.$id.tsx` → `GadgetEditor.tsx`。RPC セッション: `useAuthenticatedApi()`（AuthContext）→ ワークスペースの `overseer` オブジェクト（`stub: RpcStub<Overseer>`）を生成（GadgetEditor @422-470）。**Agent タブはこの overseer stub 経由で DO に接続する**
-- 認証済み RPC の取得例: `BlueprintLandingPage.tsx` の `useAuth(rpcStub)`
-
-### 2.5 デプロイ
-- starter の deploy.mjs が deployment.jsonc から設定生成。submodule の変更は fork に commit/push → デプロイ
-- 検証: submodule で `pnpm types:check` → `pnpm test`（変更関連）→ `pnpm build`、starter で `pnpm run check`
-
----
-
-## 3. 決定事項（AgentDefinition の形）
-
-### 3.1 型（workshop-shared/src/api.ts に追加）
 ```ts
-// ワークスペースごとの宣言的エージェント定義。null = 未設定（現行挙動）
-export interface AgentDefinition {
+interface AgentDefinition {
+  version: 2;
+  id: string;
+  name: string;
+  modelId: string;
+  agentsMd: string;
+  skillIds: string[];
+  tools: { enabled?: string[]; disabled?: string[] } | null;
+}
+
+interface SkillDefinition {
   version: 1;
-  // システムプロンプトの動的スロットに注入する断片（順序維持）
-  prompts?: string[];
-  // スキル参照（まずは Context コレクション ID 等の文字列リスト。展開は後）
-  skills?: string[];
-  // モデル上書き（任意・省略時は従来どおり）
-  model?: { provider: AiModelProvider; model: string } | null;
-  // ツール制御（enabled 優先 = ホワイトリスト。enabled 省略時は disabled を除外）
-  tools?: { enabled?: string[]; disabled?: string[] } | null;
+  id: string;
+  name: string;
+  description: string;
+  markdown: string;
 }
 ```
 
-### 3.2 RPC（Overseer インターフェースに追加）
-```ts
-getAgentDefinition(): Promise<AgentDefinition | null>;
-saveAgentDefinition(definition: AgentDefinition): Promise<void>;
-resetAgentDefinition(): Promise<void>;
-```
+- User Durable Object が Agent と Skill を別 collection として所有する。
+- Agent は Skill 本文を埋め込まず、安定 ID の `skillIds` だけを参照する。
+- Skill の `name` と `description` は完全な `SKILL.md` の YAML frontmatter から導出する。
+- Skill 名はユーザー内で一意とし、参照中の Skill は削除できない。
+- 保存時に schema version、未知フィールド、必須値、モデル、tool 名、Skill 参照、YAML frontmatter、Markdown 本文をサーバーで検証する。
 
-### 3.3 保存形式
-- **構造化オブジェクトを DO storage に保存**（生テキストではない）。UI は JSONC テキスト ⇄ 構造化の変換を担当
-- バリデーションは DO 側で実施（client 任せにしない）:
-  - 未知フィールド → 拒否
-  - `tools.enabled/disabled` のツール名は既知ツール（上記 2.3 の一覧）のみ許可 → 未知は拒否
-  - `prompts` は文字列配列・空文字は拒否
-  - `model.provider/model` は既知の組み合わせのみ許可（ai-models.ts の SUGGESTED_MODELS と照合）
+旧 v1 Agent に埋め込まれた Skill だけは、既存 dev データを失わないため User DO で一度だけ v2 の独立 Skill へ移す。これ以外の旧形式互換層は追加しない。
 
-### 3.4 挙動
-- 定義なし（null）: 現行と完全に同じ
-- `tools.enabled` 指定時: 指定ツールのみ有効（spawnerConfig 制限より先に適用。サブエージェントの制限はさらに狭める）
-- `tools.disabled` のみ: 指定ツールを除外
-- prompts は動的スロット [1] に、instanceInstructions の後に追記
-- 適用タイミング: buildAgent 毎（chat.start / 新スレッド時）。編集中のスレッドには影響しない（次スレッドから）
+### 2.3 新規会話のスナップショット
 
----
+通常チャットは公開 RPC に保存済み `agentId` だけを渡す。User DO が会話開始時に Agent、参照 Skill 全文、モデルを解決し、`AgentDefinitionSnapshot` としてチャットへ固定する。
 
-## 4. タスク一覧
+そのため、会話開始後に Agent や Skill を編集・削除しても既存会話には遡及せず、次に始める会話から反映される。通常チャットと Preview は同じ Overseer / agent loop、prompt 合成、tool 構築経路を使う。
 
-| ID | 層 | 内容 | ファイル | 依存 |
-|---|---|---|---|---|
-| T1 | shared | `AgentDefinition` 型 + Overseer RPC 3 メソッド追加 | `packages/workshop-shared/src/api.ts` | — |
-| T2 | backend | OverseerImpl に storage フィールド + CRUD 実装 + バリデーション | `packages/workshop-backend/src/overseer.ts` | T1 |
-| T3 | backend | AgentHooks に `getAgentDefinition` 追加 + hooks 実装 | `packages/workshop-backend/src/agent.ts`（型）/ `overseer.ts`（実装） | T1, T2 |
-| T4 | backend | buildAgent で定義読み込み → tools フィルタ + prompts 注入 | `packages/workshop-backend/src/agent.ts` | T3 |
-| T5 | backend | テスト（バリデーション + フィルタ + 注入） | `packages/workshop-backend/src/agent-definition.test.ts` 等 | T4 |
-| T6 | frontend | Agent タブ UI + DO 接続（JSONC エディタ・保存・リセット・プレビュー） | `packages/workshop-frontend/src/routes/` + `GadgetEditor.tsx` または新規 | T1, T2 |
-| T7 | 全体 | 最終動作（dev デプロイ + E2E） | — | T1-T6 |
+### 2.4 pi への Skill の段階的開示
 
----
+初期 system prompt に Skill 本文は入れず、選択 Skill ごとに次だけを `<available_skills>` として渡す。
 
-## 5. タスク詳細
+- `name`
+- `description`
+- 仮想 location: `agent-skill://<id>/SKILL.md`
+- 明示呼び出し: `/skill:<name>`
 
-### T1: workshop-shared に型と RPC を追加
-- 場所: `packages/workshop-shared/src/api.ts`
-- `AgentDefinition` インターフェースを追加（3.1 の形。`AiModelProvider` は同ファイル既存の型を参照）
-- `interface Overseer`（@1297）に 3 メソッド追加（3.2 の形。doc-comment 必須 — workshop-backend AGENTS.md の規約「exported member は全て doc-comment」）
-- 検証: `pnpm --dir cloudflare-os --filter @gadgets/workshop-shared types:check`（該当 script 名は package.json 確認）
+pi がタスクとの一致を判断したとき、ハーネス提供の `readSkill` tool を Skill ID または catalog 名で呼ぶ。tool は、その会話でスナップショット済みの完全な `SKILL.md` だけを返す。返却文書は tool result に保存され、後続 turn の履歴再生でも同じ内容を使う。
 
-### T2: OverseerImpl に CRUD 実装
-- 場所: `packages/workshop-backend/src/overseer.ts`
-- `OverseerImpl` の storage に `agentDefinition` を保持（typed-storage のパターンに従う。既存 `storage.code` と同様の宣言。型: `AgentDefinition | null`）
-- `getAgentDefinition()`: storage から返す（null 可）
-- `saveAgentDefinition(def)`: バリデーション（3.3）→ storage に保存
-- `resetAgentDefinition()`: null に戻す
-- バリデーション関数は切り出してテスト可能に（例: `validateAgentDefinition(def, knownTools)` を同ファイル or 別ファイル export）
-- 検証: `pnpm --dir cloudflare-os --filter @gadgets/workshop-backend types:check`
+`readSkill` はユーザーが選ぶ業務 tool ではなく Skill 機構そのものなので、Agent の allow / block policy を適用した後に追加し、policy から無効化できない。spawned agent には Agent 固有の `AGENTS.md` と Skill catalog を継承させない。
 
-### T3: AgentHooks に getAgentDefinition を追加
-- `packages/workshop-backend/src/agent.ts` @232 `interface AgentHooks` に:
-  ```ts
-  getAgentDefinition(): Promise<AgentDefinition | null>;
-  ```
-  （import は workshop-shared から）
-- hooks の実装側（overseer.ts 内で buildAgent を呼ぶ箇所）に、storage から定義を返す実装を追加（`getInstanceInstructions` と同じパターン。呼び出し箇所を grep で特定: `getInstanceInstructions` の実装を提供している場所）
+### 2.5 Agent Preview と Durable Object
 
-### T4: buildAgent で適用
-- `packages/workshop-backend/src/agent.ts`
-- buildAgent 冒頭（2056 付近）:
-  ```ts
-  let agentDefinition = await hooks.getAgentDefinition();
-  ```
-- **tools フィルタ**（spawnerConfig 分岐 @2834 の直後に挿入。適用順: spawnerConfig の狭め → definition の enabled/disabled）:
-  ```ts
-  if (agentDefinition?.tools) {
-    if (agentDefinition.tools.enabled?.length) {
-      let allowed = new Set(agentDefinition.tools.enabled);
-      tools = Object.fromEntries(Object.entries(tools).filter(([name]) => allowed.has(name)));
-    } else if (agentDefinition.tools.disabled?.length) {
-      let blocked = new Set(agentDefinition.tools.disabled);
-      tools = Object.fromEntries(Object.entries(tools).filter(([name]) => !blocked.has(name)));
-    }
-  }
-  ```
-- **prompts 注入**（systemPromptSlots 組立 @2062 付近・動的スロット）: instanceInstructions の後に定義の prompts を追記:
-  ```ts
-  let definitionPrompts = (agentDefinition?.prompts ?? []).filter(p => p.trim()).join("\n\n");
-  // 動的スロット（systemPromptSlots[1]）の先頭 or instanceInstructions の後に連結
-  ```
-- 注意: **静的スロット [0] を変更しない**（prompt cache 維持）。spawner 分岐（agentContext.spawnerConfig）では定義の prompts も適用してよいかは要判断（まず通常エージェントのみ適用が安全 → 実装時に hooks で spawner か判別し、spawner では prompts のみ適用 or スキップを決める。**初期は通常エージェントのみ**）
-- 検証: `pnpm --dir cloudflare-os --filter @gadgets/workshop-backend types:check`
+- `Apply to preview` は現在の未保存 draft を検証し、保存操作とは独立して右ペインの一時会話へ適用する。
+- 再 Apply は Preview の会話表示をリセットし、その時点の draft で次の Preview 会話を始める。
+- Preview はユーザー ID から決まる専用 Overseer DO を使い、`agentPreview: true` として User DO に登録する。
+- この DO は通常 Workspace / Output の一覧、backfill、Recent から除外する。
+- 未保存 draft は `AuthenticatedApi.startAgentPreviewChat` の認証境界だけを通り、返却される公開 Overseer capability に draft 受け渡し用 RPC は追加しない。
+- React state には callable な Cap'n Web RPC stub を直接渡さず、`{overseer}` オブジェクトに包んで保持し、終了時に dispose する。
 
-### T5: テスト
-- 場所: `packages/workshop-backend/src/` に `agent-definition.test.ts`（vitest。既存テストの構成に従う）
-- 対象:
-  - `validateAgentDefinition`: 正常系 / 未知フィールド拒否 / 未知ツール名拒否 / enabled+disabled 同時（enabled 優先） / 空文字 prompt 拒否
-  - ツールフィルタ関数（T4 で切り出した純関数）: enabled ホワイトリスト / disabled 除外 / 空配列 = 全許可
-- 実行: `pnpm --dir cloudflare-os --filter @gadgets/workshop-backend test -- agent-definition`（フルスイートは既知の収集失敗があるため対象ファイル指定）
+## 3. 実装範囲
 
-### T6: フロントエンド（DO 接続 + UI）
-- 場所: `packages/workshop-frontend/src/`
-- **DO 接続**: 既存の `overseer.stub`（GadgetEditor @422-470 のパターン。`useAuthenticatedApi()` → workspace の overseer stub）に `getAgentDefinition / saveAgentDefinition / resetAgentDefinition` が自動で生える（RPC は型定義だけでフロントから呼べる。capnweb の stub 経由）
-- **UI 配置**: ワークスペース内の「Agent」タブ/メニューを追加。実装時に GadgetEditor.tsx のタブ/ナビ構造（Explorer/Blueprints/Outputs 相当がどこにあるか）を確認して配置を決定。なければ `routes/agent.tsx` + Sidebar.tsx に「Agent」項目追加（ワークスペース選択が必要なら workspace 配下）
-- UI 内容:
-  - JSONC エディタ（テキストエリア or Monaco — CodeEditor.tsx 既存を再利用可）
-  - 保存（パース → `saveAgentDefinition`）/ リセット（`resetAgentDefinition`）/ プレビュー（現在の定義の要約表示）
-  - エラー表示（バリデーション失敗時・DO からのエラーを表示）
-- 検証: `pnpm --dir cloudflare-os --filter @gadgets/workshop-frontend build`（vite ビルド）
+### Shared API
 
-### T7: 最終動作
-1. submodule で全検証: `pnpm types:check` / 変更テスト / `pnpm build`
-2. fork にコミット（メッセージは変更内容。例: `feat: declarative agent definition (per-workspace prompts + tool control)`）→ `git push origin develop`（開発ブランチ）
-3. starter で `pnpm run check` → `DEPLOYMENT_CONFIG=deployment.dev.jsonc pnpm deploy`（dev 環境へ）
-4. E2E（os-dev.cherie-lab.com）:
-   - ワークスペースで定義を保存（例: `tools.disabled: ["webFetch"]`）
-   - チャットで「ニュースを検索して」→ エージェントが webFetch を使えない（使わない）ことを確認
-   - prompts 断片（例: 「あなたは日本語で回答する」）が反映されることを確認
-   - リセット → 元の挙動に戻ることを確認
-5. 結果報告後、本番はユーザー承認があれば同手順でデプロイ
+- Agent v2 / Skill v1 の共有型とコメント。
+- Agent CRUD、Skill CRUD / validate、Preview open / start。
+- 通常 `newChat` の任意 `agentId`。
 
----
+### Backend
 
-## 6. 既知の制約・注意
+- User DO の Agent / Skill 独立保存と厳格検証。
+- 保存済み Agent と参照 Skill の会話単位 snapshot。
+- metadata catalog、`readSkill`、tool policy、履歴 replay。
+- ユーザー別の hidden Preview DO と capability 境界。
 
-- **静的スロット [0] を汚さない**（prompt cache が壊れる）。定義の prompts は動的スロット [1] のみ
-- ツールフィルタは spawnerConfig 分岐（@2834）の**後**に入れる。適用順序: spawner の狭め → 定義のフィルタ
-- バリデーションは DO 側。未知ツール名は**拒否**（サイレント無視しない）
-- 適用は buildAgent 毎。実行中のスレッドには影響しない（次スレッドから）
-- vitest フルスイートの収集失敗（6 ファイル・既知）は無関係。対象ファイル指定で回す
-- 変更は kernel（agent.ts / overseer.ts）に及ぶ。upstream 追従時のコンフリクトを減らすため、**追加は既存機構の延長として実装**（フィルタ位置・スロット注入位置を乱さない）
-- フロントのタブ配置は実装時に GadgetEditor の構造を確認してから確定（本計画では 2 案併記）
+### Frontend
 
----
+- 独立した `/agents`、`/skills`、`/tools`。
+- 3 ペインの Agent 一覧 / 編集 / Preview。
+- `SKILL.md` エディタと frontmatter 検証。
+- built-in tool registry と副作用を起こさない入力契約テスト。
+- Home / Workspace の Agent picker。
 
-## 7. 完了条件
+## 4. 非対象
 
-- [x] T1-T6 実装・ビルド GREEN
-- [x] T5 テスト GREEN（変更関連、10/10）
-- [x] dev デプロイ成功・E2E で「定義なし = 現行」「定義あり = フィルタ/注入が効く」を確認
-- [x] E2E 後に定義をリセットし、dev ワークスペースを既定状態へ復元
-- [ ] 本番はユーザー承認後に適用
+- 任意 JavaScript tool や MCP server の登録・実行。
+- Skill / Agent の共有、公開カタログ、権限体系の追加。
+- Skill ごとの会話 Preview、Tool ごとの実行 Preview。
+- 既存会話への定義変更の遡及。
+- 本番配備、commit、push。
+
+## 5. 検証結果
+
+- backend 全体: 27 files、305 tests PASS。既存の環境依存 integration 4 tests は skip。
+- frontend 全体: 26 files、118 tests PASS。
+- 全体型検査: 26 packages PASS。
+- lint: PASS。既存 warning と `AgentPreview` の非ブロッキングな scoping warning のみ。
+- build: PASS。既存の chunk size warning のみ。
+- `git diff --check`: PASS。
+- starter `check`: deploy script 12 tests、custom gatekeeper 2 tests、error reporter 2 tests、全 build、4 Worker の `wrangler deploy --dry-run` が PASS。
+- ローカル E2E: Skill 保存、未保存 Agent の Apply、`readSkill`、完全 `SKILL.md` 読込、期待応答 `E2E-SKILL-OK`、一時 Skill 削除、hidden Preview 非表示を確認。
+- dev E2E: Workers AI の Kimi K2.7 Code で `DEV_SKILL_CHECK` を送り、`readSkill` tool call と `DEV-SKILL-OK` を確認。Tool 入力契約 UI も検証し、一時 Skill を削除した。Agent は保存しておらず、hidden Preview は Workspace 一覧へ現れていない。
+- dev 設定: AI Gateway provider は `cloudflare` のみ、`WORKERS_AI` binding と Workers AI Gateway を維持。
+- dev 配備: Workshop version `143239b6-c093-46be-b0b1-fc90d3f6fc8c`。Context `9bf858c6-e8b5-42c5-be49-3473e88a9bd7`、custom Gatekeeper `22279718-9a7c-4769-b32e-d61f54828ea4`、error reporter `839b0f8b-d255-4487-86a2-04e58f7fa871`。
+
+## 6. 完了条件
+
+- [x] サイドバー末尾に Agents / Skills / Tools がこの順で独立表示される。
+- [x] Agent を model / `AGENTS.md` / Skill 参照 / tool policy で管理できる。
+- [x] Skill を frontmatter 付き完全な `SKILL.md` として独立管理できる。
+- [x] pi が metadata catalog を見て、必要時に `readSkill` で全文を段階的に取得できる。
+- [x] 通常チャットと Preview が同じ snapshot / runtime 経路を使う。
+- [x] 未保存 draft を Agent 専用 Preview で会話テストできる。
+- [x] Preview runtime が Workspace / Output 一覧に露出しない。
+- [x] built-in Tools と入力契約テストを独立画面で確認できる。
+- [x] 全テスト、型検査、lint、build、dry-run、ローカル E2E、dev E2E が成功する。
+- [x] dev を Workers AI 構成のまま配備する。
