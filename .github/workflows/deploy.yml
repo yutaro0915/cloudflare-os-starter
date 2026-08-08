@@ -1,9 +1,12 @@
 name: deploy
 
 # Deploys from GitHub (never from local):
-#   - push to main    -> production (os.cherie-lab.com, deployment.jsonc)
-#   - push to develop -> development (os-dev.cherie-lab.com, deployment.dev.jsonc)
+#   - push to main -> production (os.cherie-lab.com, deployment.jsonc)
 #   - manual dispatch with dry_run=true -> check only (tests + build + dry-run), no deploy
+#
+# Branch model (2026-08-08): trunk-based. Feature branches -> PR into main -> merge -> deploy.
+# The old always-on develop environment was removed; per-PR preview environments are the
+# planned replacement.
 #
 # The deploy.mjs script generates the per-worker wrangler configs (all KV/R2/service-binding
 # env vars included) from the deployment config, so this workflow just runs it. Secrets are
@@ -11,7 +14,7 @@ name: deploy
 
 on:
   push:
-    branches: [main, develop]
+    branches: [main]
   workflow_dispatch:
     inputs:
       dry_run:
@@ -34,9 +37,9 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     timeout-minutes: 60
-    # Human gate: main (production) deploys wait for manual approval in the GitHub UI
-    # (Settings > Environments > production, required reviewer). develop deploys run unattended.
-    environment: ${{ github.ref_name == 'main' && 'production' || 'development' }}
+    # Human gate: production deploys wait for manual approval in the GitHub UI
+    # (Settings > Environments > production, required reviewer).
+    environment: production
     steps:
       - uses: actions/checkout@v6
         with:
@@ -55,19 +58,8 @@ jobs:
           pnpm install
           pnpm --dir cloudflare-os install
 
-      - name: Resolve deployment config by branch
-        id: cfg
-        run: |
-          if [ "${{ github.ref_name }}" = "main" ]; then
-            echo "config=deployment.jsonc" >> "$GITHUB_OUTPUT"
-            echo "workshop=cloudflare-os-workshop" >> "$GITHUB_OUTPUT"
-          else
-            echo "config=deployment.dev.jsonc" >> "$GITHUB_OUTPUT"
-            echo "workshop=cloudflare-os-workshop-dev" >> "$GITHUB_OUTPUT"
-          fi
-
       - name: Check (tests + build + dry-run)
-        run: DEPLOYMENT_CONFIG=${{ steps.cfg.outputs.config }} pnpm run check
+        run: DEPLOYMENT_CONFIG=deployment.jsonc pnpm run check
 
       - name: Skip deploy in dry_run mode
         if: ${{ inputs.dry_run }}
@@ -80,19 +72,18 @@ jobs:
           OPENCODE_GO_API_KEY: ${{ secrets.OPENCODE_GO_API_KEY }}
         run: |
           if [ -n "$CF_AI_GATEWAY_API_TOKEN" ]; then
-            printf '%s' "$CF_AI_GATEWAY_API_TOKEN" | pnpm exec wrangler secret put CF_AI_GATEWAY_API_TOKEN --name "${{ steps.cfg.outputs.workshop }}"
+            printf '%s' "$CF_AI_GATEWAY_API_TOKEN" | pnpm exec wrangler secret put CF_AI_GATEWAY_API_TOKEN --name cloudflare-os-workshop
           fi
-          if [ "${{ github.ref_name }}" = "main" ] && [ -n "$OPENCODE_GO_API_KEY" ]; then
+          if [ -n "$OPENCODE_GO_API_KEY" ]; then
             printf '%s' "$OPENCODE_GO_API_KEY" | pnpm exec wrangler secret put OPENCODE_GO_API_KEY --name cloudflare-os-model-relay
           fi
 
       - name: Deploy workers (deploy.mjs generates configs + all bindings)
         if: ${{ !inputs.dry_run }}
-        run: DEPLOYMENT_CONFIG=${{ steps.cfg.outputs.config }} pnpm deploy
+        run: DEPLOYMENT_CONFIG=deployment.jsonc pnpm deploy
 
-      # The model relay is shared by prod and dev (the AI Gateway routes to it), so it only
-      # deploys from main to keep a single source of truth.
-      - name: Deploy model relay (main only)
-        if: ${{ !inputs.dry_run && github.ref_name == 'main' }}
+      # The model relay is shared with the AI Gateway routing, single source of truth on main.
+      - name: Deploy model relay
+        if: ${{ !inputs.dry_run }}
         working-directory: relay
         run: pnpm exec wrangler deploy

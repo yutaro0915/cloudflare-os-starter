@@ -122,3 +122,10 @@
 - private 中は PR コメントの画像インライン表示不可（public 化で解消。それまでは blob リンク）
 - Actions: public repo は無料枠無制限、private は月 2,000 分
 - 本番（os.cherie-lab.com）昇格は常に人間承認ゲート
+
+## 改訂 2026-08-08: starter 側 develop 廃止
+
+starter (cloudflare-os-starter) は trunk-based に移行した。PR base は main、
+gitlink bump は「main への PR 作成」に変更(bump-submodule.yml)。dev 環境
+(os-dev / *-dev workers) は撤去し、確認は PR 単位の ephemeral preview(実装予定)が担う。
+必須チェック `pr-from-develop` は撤廃。cloudflare-os 側 merge train の扱いは別途判断。

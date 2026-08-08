@@ -145,3 +145,13 @@
 - **プロンプトは動的スロット注入**（systemPromptSlots[1]）→ プロンプトキャッシュ維持
 - **定義は OverseerDO の storage**（新 DO 不要）→ 共有が必要になったら定義 ID キーの DO に分離（Blueprint と同じパターン）
 - **スキルは 3 段階**: 断片 → Context コレクション参照 → ツール化（後）
+
+## 改訂 2026-08-08: develop 廃止（trunk-based へ移行)
+
+上記「ブランチ戦略」「開発環境」の節は旧構成。現在は:
+
+- ブランチ: `main`(本番) / `feature/*` のみ。`develop` と常設 dev 環境
+  (deployment.dev.jsonc / os-dev.cherie-lab.com / `*-dev` workers) は廃止。
+- main へは任意ブランチから PR(直接 push 禁止)。本番反映は Environment `production`
+  の承認ゲートで人間が制御。
+- ブランチごとの確認は PR 単位の ephemeral preview 環境で置き換える(実装予定)。
