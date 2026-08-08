@@ -16,6 +16,7 @@
     },
     "context": { "name": "cloudflare-os-context" },
     "customGatekeeper": { "name": "cloudflare-os-custom" },
+    "memoryGatekeeper": { "name": "cloudflare-os-memory" },
     "errorReporter": { "name": "cloudflare-os-error-reporter" }
   },
 

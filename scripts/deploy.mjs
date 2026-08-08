@@ -12,6 +12,7 @@ const generatedPaths = {
   workshop: join(root, "cloudflare-os/packages/workshop-backend", generatedName),
   context: join(root, "cloudflare-os/packages/gatekeeper-context", generatedName),
   customGatekeeper: join(root, "packages/custom-gatekeeper", generatedName),
+  memoryGatekeeper: join(root, "packages/gatekeeper-memory", generatedName),
   errorReporter: join(root, "packages/error-reporter", generatedName),
 };
 
@@ -20,6 +21,7 @@ const requiredPaths = [
   "workers.workshop.name",
   "workers.context.name",
   "workers.customGatekeeper.name",
+  "workers.memoryGatekeeper.name",
   "access.admins",
   "aiGateway.enabled",
   "errorReporting.enabled",
@@ -254,6 +256,7 @@ export function generateConfigs(config, bases) {
   const workshop = structuredClone(bases.workshop);
   const context = structuredClone(bases.context);
   const customGatekeeper = structuredClone(bases.customGatekeeper);
+  const memoryGatekeeper = structuredClone(bases.memoryGatekeeper);
   const errorReporter = config.errorReporting.enabled
     ? structuredClone(bases.errorReporter)
     : undefined;
@@ -307,6 +310,11 @@ export function generateConfigs(config, bases) {
       service: config.workers.customGatekeeper.name,
       entrypoint: "GatekeeperVendor",
     },
+    {
+      binding: "GATEKEEPER_MEMORY",
+      service: config.workers.memoryGatekeeper.name,
+      entrypoint: "GatekeeperVendor",
+    },
   ];
   workshop.kv_namespaces = [
     { binding: "BLUEPRINTS", ...(config.resources.blueprintsKvNamespaceId
@@ -336,11 +344,14 @@ export function generateConfigs(config, bases) {
     CUSTOM_MESSAGE: config.customGatekeeper.message,
   };
 
+  setCommon(memoryGatekeeper, config, config.workers.memoryGatekeeper.name);
+
   if (errorReporter) {
     setCommon(errorReporter, config, config.workers.errorReporter.name);
   }
 
-  return { workshop, context, customGatekeeper, ...(errorReporter && { errorReporter }) };
+  return { workshop, context, customGatekeeper, memoryGatekeeper,
+    ...(errorReporter && { errorReporter }) };
 }
 
 async function readJsonc(path) {
@@ -381,6 +392,7 @@ function requireSubmodule() {
 function build(config) {
   run(["--dir", "cloudflare-os", "--filter", "@gadgets/gatekeeper-context", "build"]);
   run(["--dir", "packages/custom-gatekeeper", "run", "build"]);
+  run(["--dir", "packages/gatekeeper-memory", "run", "build"]);
   if (config.errorReporting.enabled) {
     run(["--dir", "packages/error-reporter", "run", "build"]);
   }
@@ -412,6 +424,7 @@ async function main() {
     workshop: await readJsonc(join(root, "cloudflare-os/packages/workshop-backend/wrangler.jsonc")),
     context: await readJsonc(join(root, "cloudflare-os/packages/gatekeeper-context/wrangler.jsonc")),
     customGatekeeper: await readJsonc(join(root, "packages/custom-gatekeeper/wrangler.jsonc")),
+    memoryGatekeeper: await readJsonc(join(root, "packages/gatekeeper-memory/wrangler.jsonc")),
     errorReporter: await readJsonc(join(root, "packages/error-reporter/wrangler.jsonc")),
   });
 
@@ -431,6 +444,8 @@ async function main() {
       join(root, "cloudflare-os/packages/gatekeeper-context"));
     run(["exec", "wrangler", "deploy", "--config", generatedName, ...deployArgs],
       join(root, "packages/custom-gatekeeper"));
+    run(["exec", "wrangler", "deploy", "--config", generatedName, ...deployArgs],
+      join(root, "packages/gatekeeper-memory"));
     run(["exec", "wrangler", "deploy", "--config", generatedName, ...deployArgs, ...secretsFileArgs()],
       join(root, "cloudflare-os/packages/workshop-backend"));
   } finally {
