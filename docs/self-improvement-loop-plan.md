@@ -57,6 +57,10 @@
 - fork PR に secrets を渡さない GitHub 標準挙動を維持
 - CI 用テスト認証情報は使い捨てを GitHub secrets に置く（dev/prod と共用しない。
   Keychain は runner に無い）
+- **main の保護（2026-08-08 実装済み）**: 両 repo とも main へは develop からの PR のみ
+  （branch protection: 直接 push 禁止・必須チェック `pr-from-develop`・enforce_admins・
+  force push / 削除禁止）。マージ操作は人間のみ（エージェントは行わない）。
+  本番 deploy は Environment `production` の承認とあわせて二重ゲート
 
 ## 実装フェーズ
 
