@@ -1,0 +1,64 @@
+{
+  // PREVIEW template — one ephemeral fleet per cloudflare-os feature PR.
+  // Norms: cloudflare-os .github/agents/rubrics/flow.md (this file is a derived artifact).
+  // Not deployed directly: cloudflare-os/.github/workflows/preview-env.yml checks this
+  // repo out and replaces __PR__ with the PR number before running deploy.mjs.
+  // No custom domain (workers.dev only); resources are auto-provisioned per fleet.
+  "accountId": "495d8f7ad5d97ab5254043eda39ff698",
+
+  "workers": {
+    "workshop": {
+      "name": "cloudflare-os-workshop-pr-__PR__",
+      "route": { "workersDev": true }
+    },
+    "context": { "name": "cloudflare-os-context-pr-__PR__" },
+    "customGatekeeper": { "name": "cloudflare-os-custom-pr-__PR__" },
+    "errorReporter": { "name": "cloudflare-os-error-reporter-pr-__PR__" }
+  },
+
+  // Fresh preview DOs start with signups ENABLED (runtime default), so verification
+  // accounts are created by signing up — no seeding step. Accepted risk: anyone who
+  // discovers the workers.dev URL can sign up while the PR is open.
+  "access": {
+    "admins": ["cherie"]
+  },
+
+  // Previews use the free Workers AI catalog only (same as the old dev environment).
+  "aiGateway": {
+    "enabled": true,
+    "name": "cloudflare-os",
+    "accountId": "495d8f7ad5d97ab5254043eda39ff698",
+    "providers": ["cloudflare"],
+    "workersAi": { "mode": "gateway", "gateway": "cloudflare-os" }
+  },
+
+  "context": {
+    "sharingDomain": "preview-pr-__PR__",
+    "kvNamespaceId": null
+  },
+
+  "customGatekeeper": {
+    "name": "Cherie Lab Preview",
+    "message": "Ephemeral preview fleet for a cloudflare-os pull request."
+  },
+
+  "errorReporting": {
+    "enabled": true,
+    "environment": "preview-pr-__PR__",
+    "release": null
+  },
+
+  // Auto-provisioned per preview fleet on first deploy; removed by preview-teardown.
+  "resources": {
+    "blueprintsKvNamespaceId": null,
+    "avatarsKvNamespaceId": null,
+    "blueprintContentBucket": null
+  },
+
+  "observability": {
+    "enabled": true,
+    "headSamplingRate": 1,
+    "logs": { "invocationLogs": false },
+    "traces": { "enabled": false, "headSamplingRate": 0.1 }
+  }
+}
