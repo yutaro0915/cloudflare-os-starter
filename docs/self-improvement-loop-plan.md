@@ -89,8 +89,27 @@
       （repository_dispatch で starter へ連携）。手動 issue → 自動 PR → 手動マージ → 自動デプロイ
       が通ることを確認。issue テンプレート（再現手順・期待/実際・環境）もここで作成
       （後の reportBug RPC の仕様書を兼ねる）
-- [ ] **Phase 2: merge train** — 自作 train workflow + reconciler 再依頼（`@claude` に rebase
-      衝突解決を再依頼、2 回失敗で needs-human）+ ガードレール実装
+- [x] **Phase 2: merge train**（2026-08-08 実装・通し検証済み）—
+      `merge-train.yml`: concurrency `merge-train`（mutex・cancel なし）で直列化。
+      1 run = 1 PR（`automerge` ラベルの最古優先）。**CI は train 内部で実行**
+      （GITHUB_TOKEN によるマージは push トリガー workflow を発火させないため、
+      外部 CI 待ちの設計は成立しない）: 最新 develop を head へローカル merge →
+      install/build/lint/test → GREEN のみ `gh pr merge --merge`。
+      衝突 → `needs-rebase` + `@claude` へ解決依頼（`<!-- merge-train-rebase -->`
+      マーカーで試行カウント、2 回で `needs-human`）。CI 失敗 → `needs-human`。
+      ガードレール: `.github/workflows|.github/agents|wrangler*.jsonc|deployment*`
+      を触る PR は auto-merge 拒否（needs-human）。キュー残があれば
+      `gh workflow run` で自己再帰（workflow_dispatch は GITHUB_TOKEN でも発火可能な例外）。
+      claude-fix の PR は `--label automerge` で自動的に train に乗る。
+      gitlink bump: train 末尾で starter へ `repository_dispatch`（submodule-bump）→
+      starter `bump-submodule.yml` が gitlink を進めて push → deploy。
+      **要 secret `REPO_SYNC_TOKEN`**（fine-grained PAT、starter の Contents: RW。
+      両 repo に登録。未設定の間は dispatch を skip し手動 bump）。
+      検証: PR #5（docs-only smoke test）が labeled → train → CI GREEN → 自動マージ。
+      教訓: `run: |` 内の複数行コメント本文はインデック必須（YAML block scalar 切断で
+      workflow 全体が起動時失敗になった → printf 単一行方式へ、actionlint を事前実行）
+- [ ] **Phase 2 残**: REPO_SYNC_TOKEN 登録（ユーザー）、conflict 経路（needs-rebase →
+      @claude reconciler）の実弾検証、日次ディスパッチ回数上限
 - [ ] **Phase 3: 検証・証跡** — claude.yml に検証手順（wrangler dev 起動 → シード → Playwright）
       と証跡規約を組み込み。pr-assets orphan ブランチ整備。再現スクリプト → 回帰テスト昇格の運用
 - [ ] **Phase 4: ハブ側バグ報告** — OS UI「Report a bug」+ reportBug RPC + 指紋 dedupe +
