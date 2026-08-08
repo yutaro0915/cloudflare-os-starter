@@ -1,7 +1,9 @@
 # 自己改善ループ計画 — バグ報告 → issue → 自動改修 → auto-merge → デプロイ
 
 - 日付: 2026-08-08
-- 状態: 承認済み・実施中
+- 状態: **凍結**(Phase 0-2 の記録)。ブランチ・環境モデルは
+  cloudflare-os `.github/agents/rubrics/flow.md`(規範の正本)と
+  `docs/branching-and-environments-plan.md`(実装計画)が置き換える(2026-08-08)
 - 正本: 本ファイル（設計判断の経緯は LLMWiki セッションログ 2026-08-08）
 - 関連: `PLAN.md`（コアデモ構想）、`docs/implementation-agent-definition.md`
 
