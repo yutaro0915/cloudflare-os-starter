@@ -287,6 +287,9 @@ export function generateConfigs(config, bases) {
       workshop.vars.CF_AI_GATEWAY_WAI_DIRECT = "true";
     }
   }
+  // The built-in firecrawlSearch agent tool runs keyless by default (Firecrawl's starter
+  // tier, shared per-IP limits). Install the optional FIRECRAWL_API_KEY secret on the
+  // workshop Worker to raise the limits; it is deliberately NOT declared required here.
   workshop.ai = { binding: "WORKERS_AI" };
   workshop.services = [
     ...(config.errorReporting.enabled ? [{
