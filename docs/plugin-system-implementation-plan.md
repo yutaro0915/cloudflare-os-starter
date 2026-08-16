@@ -114,7 +114,11 @@ sequenceDiagram
 - [導入後](./plugin-store-installed.jpg)
 - [Focus Guide実行](./plugin-store-focus-guide-open.jpg)
 - [解除後](./plugin-store-after-uninstall.jpg)
-- [A→B→実行→Aの動画](./plugin-store-demo.mp4)
+- [Remotion説明動画（47秒・日本語ナレーション）](./plugin-store-focus-guide-demo-remotion.mp4)
+
+動画は画面状態を順に並べるだけでなく、連続ズーム、操作カーソル、3ステップの逐次表示、
+artifactから画面までの処理フロー、uninstall遷移をRemotionで合成しています。また、Focus Guideの実機能は
+「25分集中の手順パネル」であり、タイマー実行やタスク保存ではないことを映像内で明示します。
 
 稼働中のpublisher、外部artifact Store、署名、review queue、atomic publishはこのtracerには含めません。
 同じmanifest／artifact portへ後続adapterを追加できる状態ですが、必要性を観測するまで権限面を増やしません。
