@@ -123,6 +123,28 @@ artifactから画面までの処理フロー、uninstall遷移をRemotionで合�
 稼働中のpublisher、外部artifact Store、署名、review queue、atomic publishはこのtracerには含めません。
 同じmanifest／artifact portへ後続adapterを追加できる状態ですが、必要性を観測するまで権限面を増やしません。
 
+## Stateful sidebar pluginの実証
+
+二つ目のproduction packageとして`circle.personal-kanban@1.0.0`を追加しました。これはFocus Guideの
+静的なdetails contributionとは異なり、installするとサイドバーへ`Kanban`が現れ、専用routeから
+タスクの作成、列間移動、削除を行えます。ボードは1 installationにつき1つで、`To do / Doing / Done`
+の3列をartifact側のpure reducerが管理します。
+
+状態の正本はWorker memoryではなくuser-owned PluginState Durable Objectです。各mutationは
+`expectedRevision + mutationId`付きCASで保存され、同じmutationの再送は一度だけ適用されます。
+uninstallはowner tombstoneを先に置いて新規操作を拒否し、stateをdetached lifecycleへ保持します。
+再installは新しいinstallation IDと空のboardから始まるため、旧stateが混ざりません。
+
+視覚証拠:
+
+- [実アプリのDoing状態](./plugin-kanban-doing.png)
+- [Remotion動画poster](./plugin-kanban-demo-poster.jpg)
+- [Remotion操作動画（42秒・1280×720・30fps）](./plugin-kanban-demo-remotion.mp4)
+
+動画は静止画の切替ではなく、install後のsidebar entry出現、route遷移、文字入力、カード生成、
+To doからDoingへの連続移動、再読込後の永続状態、実アプリ画面への接続をframe単位で合成しています。
+検証器は2fps標本84枚中81枚が一意であることを確認します。
+
 ## 現在のプラグイン化範囲
 
 Cordisの一般的な適用範囲ではなく、現在のCloudflareOSで実際にhost contractが存在する面だけを示します。
@@ -131,8 +153,8 @@ Cordisの一般的な適用範囲ではなく、現在のCloudflareOSで実際�
 |---|---|---|
 | 所有・配布 | user／workspace／deploymentの希望状態、exact manifest、build-time Store catalog | 稼働中publish、署名、review workflow |
 | 実行 | `handshake()`／host起点`invoke()`、依存解決、更新、rollback、cleanup | agent loop、model呼出し、system prompt構築 |
-| capability | `workspace.metadata.read`、`plugin.state.read` | agent tool catalog、外部write capability、PluginState write |
-| UI | Plugin Storeの`user-plugin.details`にclosed text／notice／listを表示 | chat分割、sidebar／route追加、任意React／browser JavaScript |
+| capability | `workspace.metadata.read`、`plugin.state.read`、foregroundの`plugin.ui.state.mutate` | agent tool catalog、外部サービスwrite capability |
+| UI | Plugin Store detailsのclosed document、user plugin由来sidebar entry／host固定route、closed interactive columns／items／actions | chat分割、任意React／browser JavaScript |
 | lifecycle | user install／uninstall／state purge、workspace／deployment install/update | workspace／deployment uninstall／purge parity |
 
 したがって現在地は「安全に着脱できるkernelと最初の狭いcontribution面は実装済み」ですが、
