@@ -3,7 +3,7 @@ title: "CloudflareOS × Cordis プラグイン基盤 実装計画"
 status: implemented
 date: 2026-08-16
 adr: adr-001-plugin-ownership-scopes
-checkpoint: 7b00964
+checkpoint: 5e9c247
 ---
 
 # CloudflareOS × Cordis プラグイン基盤 実装計画
@@ -12,8 +12,9 @@ checkpoint: 7b00964
 
 [`ADR-001`](./adr-001-plugin-ownership-scopes.md) で確定した型付きスコープと20の派生契約を、
 11本の垂直スライスとして実装しました。submodule branchは`codex/plugin-control-plane`、
-Plugin Center coreのcheckpointは`484de71`、人間レビューStore tracerを含む最終checkpointは`7b00964`です。
-push／deployはしていません。
+Plugin Center coreのcheckpointは`484de71`、人間レビューStore tracerは`7b00964`、
+stateful sidebar Kanbanは`19c95d8`、foreground action reliabilityは`5e9c247`です。
+開発ブランチだけをpushし、productionへのmerge／deploy／submodule pinはしていません。
 
 Skill A/Bチャット比較はQ15を説明する例であり、個別プラグインとしては実装していません。
 
@@ -161,6 +162,26 @@ Cordisの一般的な適用範囲ではなく、現在のCloudflareOSで実際�
 エージェントに関わるほぼ全てがプラグイン化済みという状態ではありません。Agent／SkillのCRUDも、
 現時点ではプラグインcontributionではなく固定coreの設定機能です。
 
+## Foreground action reliabilityフェーズ
+
+AS-ISでは、PluginState DOは`expectedRevision + mutationId`で同じmutationを一度だけ適用できる一方、
+browserは送信ごとに新しいmutation IDを作り、response loss時にもform inputを消していました。また、同じ
+installation IDのままpackageを更新できるのに、interactive requestはpackage versionへbindされていませんでした。
+
+TO-BEでは、mounted plugin surfaceが未確定のforeground actionを1件だけ所有します。transport exception時は
+exact requestとinputを保持し、利用者は同じrequestを`Retry action`するか、破棄してowner SSOTを
+`Reload latest`します。pending中は別mutationを開始しません。requestはinstallation IDに加えてpackage versionへ
+bindし、backendはreplacement manifest／state／artifactへ到達する前にversion mismatchを拒否します。
+
+Development Evalは次の3件です。
+
+1. server commit後にresponseだけが失われても、同じrequest全体をretryしてrevision 1・item 1件へ収束する。
+2. 同一surfaceのnavigation再読込中にresponse lossしても、inputとRetry／Reloadを失わない。
+3. v1 pending中に同じinstallationがv2へ更新されても、v1 exact requestをv2 reducerへ渡さず、拒否後にv2をopenする。
+
+route移動／browser reloadを跨ぐdurable outboxは、IndexedDB、multi-tab ownership、logout cleanupを伴う別の
+所有境界です。今回のmounted-page保証へ混ぜず、必要性が観測された時の独立フェーズとします。
+
 ## AI自己進化の運用ゲート
 
 将来の自己進化を阻害する永続形式にはしていませんが、現時点ではAIへ次を一切渡しません。
@@ -180,10 +201,10 @@ default-denyです。`CUSTOM_AGENT_TOOL_NAMES`にも該当名を追加せず、�
 
 最終証拠:
 
-- manifest generator: 18件 GREEN
-- workshop backend unit: 472件 GREEN
-- workshop backend integration: 26件 GREEN、環境依存4件skip
-- workshop frontend: 139件 GREEN
+- manifest generator: 19件 GREEN
+- workshop backend unit: 479件 GREEN
+- workshop backend integration: 33件 GREEN、環境依存4件skip
+- workshop frontend: 146件 GREEN
 - submodule lint／全workspace TypeScript: GREEN
 - backend worker build、frontend production build: GREEN
 - outer wrapper `pnpm check`: unit／typecheck／全Wrangler dry-run GREEN
@@ -199,6 +220,8 @@ default-denyです。`CUSTOM_AGENT_TOOL_NAMES`にも該当名を追加せず、�
 - `8e772a1`／`f94ddf4`: user PluginState lifecycleとpurge
 - `484de71`: Plugin Center、manifest v4、declarative／worker-rendered UI
 - `7b00964`: 人間レビューStore tracer、Focus Guide、AI authority非配布のmodel-seam回帰
+- `19c95d8`: stateful sidebar Kanban、PluginState CAS、user-only interactive contribution
+- `5e9c247`: response-loss retry、same-surface refresh保持、package-version fence
 
 ## 今回の完了境界
 
