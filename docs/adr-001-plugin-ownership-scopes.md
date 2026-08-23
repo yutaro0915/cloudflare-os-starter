@@ -215,12 +215,27 @@ authorityが存在しないdefault-denyを正本とします。
 
 ## 残る実装選択
 
-次は上記契約を変えない範囲の実装選択であり、このADRでは固定しません。
+次は上記契約を変えない範囲の、現在も将来条件に依存する実装選択であり、このADRでは固定しません。
 
-- Cordisの採用バージョンと、CloudflareOSからCordisを隔離する具体的なアダプタAPI
-- 汎用PluginState DOの物理schema、sharding、容量上限、D1/R2への退避条件
-- Worker LoaderとWorkers for Platformsの具体的な使い分け
+- 現在のPluginState quotaを越えた場合のsharding、D1/R2への退避条件
+- 現在のDynamic Worker LoaderからWorkers for Platformsへ移行する条件
 - Storeの検索・レビュー画面、課金、ランキング
+
+## 実装追補（2026-08-23）
+
+このADRを変更せず、実装計画の後続hardeningで次を具体化しました。
+
+- `cordis@4.0.0-rc.8`を固定し、trusted adapterからDynamic Workerを調停します。
+- 汎用PluginState DOはowner刻印、revision CAS、64 key、64KiB/value、256KiB/installをhost側で強制します。
+- content-addressed PluginStore DOはmanifest／artifactのdigest、ECDSA P-256署名、隔離test evidenceを検証し、
+  非公開candidateのstageと原子的publishを分離します。
+- AI候補pipelineは生成主体へStore／署名／install authorityを渡さず、deploymentまたは新capability要求を
+  承認待ちにします。現在のagent tool catalog／contextにはこのpipelineを公開しません。
+- runtime状態と失敗は安全なprojectionとして利用者へ表示し、host-owned append-only auditへ永続化します。
+- UI worker RPCは同時実行／頻度／lease／wall-clockをhost側で制限し、timeout時にin-flight RPCをdisposeします。
+
+実装checkpointは`756cbf0`、詳細と検証件数は
+[`plugin-system-implementation-plan.md`](./plugin-system-implementation-plan.md)を正本とします。
 
 ## 対象外
 

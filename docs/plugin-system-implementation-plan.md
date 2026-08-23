@@ -3,7 +3,7 @@ title: "CloudflareOS × Cordis プラグイン基盤 実装計画"
 status: implemented
 date: 2026-08-16
 adr: adr-001-plugin-ownership-scopes
-checkpoint: 5e9c247
+checkpoint: 756cbf0
 ---
 
 # CloudflareOS × Cordis プラグイン基盤 実装計画
@@ -11,10 +11,10 @@ checkpoint: 5e9c247
 ## 結論
 
 [`ADR-001`](./adr-001-plugin-ownership-scopes.md) で確定した型付きスコープと20の派生契約を、
-11本の垂直スライスとして実装しました。submodule branchは`codex/plugin-control-plane`、
+11本の垂直スライスと6件の後続hardeningとして実装しました。submodule branchは`codex/plugin-control-plane`、
 Plugin Center coreのcheckpointは`484de71`、人間レビューStore tracerは`7b00964`、
-stateful sidebar Kanbanは`19c95d8`、foreground action reliabilityは`5e9c247`です。
-開発ブランチだけをpushし、productionへのmerge／deploy／submodule pinはしていません。
+stateful sidebar Kanbanは`19c95d8`、foreground action reliabilityは`5e9c247`、
+後続hardeningは`756cbf0`です。開発ブランチだけをpushし、productionへのmerge／deployはしていません。
 
 Skill A/Bチャット比較はQ15を説明する例であり、個別プラグインとしては実装していません。
 
@@ -121,8 +121,10 @@ sequenceDiagram
 artifactから画面までの処理フロー、uninstall遷移をRemotionで合成しています。また、Focus Guideの実機能は
 「25分集中の手順パネル」であり、タイマー実行やタスク保存ではないことを映像内で明示します。
 
-稼働中のpublisher、外部artifact Store、署名、review queue、atomic publishはこのtracerには含めません。
-同じmanifest／artifact portへ後続adapterを追加できる状態ですが、必要性を観測するまで権限面を増やしません。
+当初のtracerには稼働中publisher、署名、evidence、approval、atomic publishを含めませんでした。
+後続hardeningでは同じmanifest／artifact portの背後へcontent-addressed PluginStore DOを追加し、署名と隔離試験証拠を
+検証したcandidateを非公開でstageし、管理者承認または既存のuser／workspace承認範囲内だけで原子的に公開します。
+未公開candidateはcatalog／artifact resolverから観測できません。
 
 ## Stateful sidebar pluginの実証
 
@@ -152,11 +154,11 @@ Cordisの一般的な適用範囲ではなく、現在のCloudflareOSで実際�
 
 | 区分 | 現在プラグイン化されているもの | 現在固定coreのもの |
 |---|---|---|
-| 所有・配布 | user／workspace／deploymentの希望状態、exact manifest、build-time Store catalog | 稼働中publish、署名、review workflow |
+| 所有・配布 | user／workspace／deploymentの希望状態、exact manifest、content-addressed Store、署名付きcandidate、evidence、approval、atomic publish | Storeの検索・購入・ランキングUI、外部artifact退避 |
 | 実行 | `handshake()`／host起点`invoke()`、依存解決、更新、rollback、cleanup | agent loop、model呼出し、system prompt構築 |
-| capability | `workspace.metadata.read`、`plugin.state.read`、foregroundの`plugin.ui.state.mutate` | agent tool catalog、外部サービスwrite capability |
-| UI | Plugin Store detailsのclosed document、user plugin由来sidebar entry／host固定route、closed interactive columns／items／actions | chat分割、任意React／browser JavaScript |
-| lifecycle | user install／uninstall／state purge、workspace／deployment install/update | workspace／deployment uninstall／purge parity |
+| capability | `workspace.metadata.read`、`plugin.state.read`／write／CAS、foregroundの`plugin.ui.state.mutate` | agent tool catalog、外部サービスwrite capability |
+| UI | Plugin Store detailsのclosed document、user plugin由来sidebar entry／host固定route、closed interactive columns／items／actions、runtime状態表示 | chat分割、任意React／browser JavaScript |
+| lifecycle | 3 scopeのinstall／update／uninstall、state detach／明示purge | なし（定義済み3 scopeの範囲） |
 
 したがって現在地は「安全に着脱できるkernelと最初の狭いcontribution面は実装済み」ですが、
 エージェントに関わるほぼ全てがプラグイン化済みという状態ではありません。Agent／SkillのCRUDも、
@@ -182,9 +184,15 @@ Development Evalは次の3件です。
 route移動／browser reloadを跨ぐdurable outboxは、IndexedDB、multi-tab ownership、logout cleanupを伴う別の
 所有境界です。今回のmounted-page保証へ混ぜず、必要性が観測された時の独立フェーズとします。
 
-## AI自己進化の運用ゲート
+## AI候補パイプラインと運用ゲート
 
-将来の自己進化を阻害する永続形式にはしていませんが、現時点ではAIへ次を一切渡しません。
+生成→隔離test→署名→非公開stage→policy-gated publishのhost-onlyパイプラインを実装しました。
+generator portが受け取るのはpromptだけで、Store stub、署名鍵、install capabilityは受け取りません。runtime／UI artifactは
+networkとenvを持たないDynamic WorkerでCPU・subrequest・wall-clock上限付き契約試験を行い、RPC timeout時は
+in-flight promiseとentrypointを明示disposeします。deployment候補または新capability要求は必ず承認待ちとなり、
+既承認範囲内のuser／workspace候補だけが自動公開可能です。
+
+一方、現時点のAI agentへは次を一切渡しません。
 
 - plugin生成／公開／install tool
 - manifest、artifact、publisher capability、Store binding
@@ -192,7 +200,7 @@ route移動／browser reloadを跨ぐdurable outboxは、IndexedDB、multi-tab o
 
 この条件は「disabled tool」やfeature flagではなく、agent tool catalogと実行envにauthority自体を存在させない
 default-denyです。`CUSTOM_AGENT_TOOL_NAMES`にも該当名を追加せず、回帰テストで固定しました。
-将来解禁する場合は、AI生成→隔離test→証拠付きcandidate→人間reviewという別Spaceを再決定します。
+host-onlyパイプラインをagentへ解禁する場合は、tool／context配布を別の意思決定として扱います。
 
 ## TDDと独立レビュー
 
@@ -202,9 +210,9 @@ default-denyです。`CUSTOM_AGENT_TOOL_NAMES`にも該当名を追加せず、�
 最終証拠:
 
 - manifest generator: 19件 GREEN
-- workshop backend unit: 479件 GREEN
-- workshop backend integration: 33件 GREEN、環境依存4件skip
-- workshop frontend: 146件 GREEN
+- workshop backend unit: 481件 GREEN
+- workshop backend integration: 43件 GREEN、環境依存4件skip
+- workshop frontend: 149件 GREEN
 - submodule lint／全workspace TypeScript: GREEN
 - backend worker build、frontend production build: GREEN
 - outer wrapper `pnpm check`: unit／typecheck／全Wrangler dry-run GREEN
@@ -222,20 +230,23 @@ default-denyです。`CUSTOM_AGENT_TOOL_NAMES`にも該当名を追加せず、�
 - `7b00964`: 人間レビューStore tracer、Focus Guide、AI authority非配布のmodel-seam回帰
 - `19c95d8`: stateful sidebar Kanban、PluginState CAS、user-only interactive contribution
 - `5e9c247`: response-loss retry、same-surface refresh保持、package-version fence
+- `756cbf0`: 3-scope lifecycle parity、PluginState quota、Store／AI候補pipeline、runtime status／audit、UI実行制御
 
-## 今回の完了境界
+## 後続hardeningの完了境界
 
-この文書の11スライスは完了です。一方、初期ビジョン全体には次の別計画が残ります。
-これは今回の完了を曖昧にする「あと少し」ではなく、accepted ADRで対象外または後続とした独立した仕事です。
+前checkpointで明示した6件はすべて完了しました。
 
-- workspace／deploymentのuninstall・state detach・purge parity
-- PluginState write／CAS／quotaと、診断以外のproduction capability catalog
-- bundled catalogを越えるcontent-addressed Store、署名、evidence、approval、atomic publish
-- AI生成→隔離test→署名付き候補→Store公開の自己進化ループ（現在はtool／context非配布）
-- active／suspended／failedとruntime failure auditの利用者・運用者向け可視化
-- UI renderの同時実行／頻度上限とtimeout後の物理cancelに関する運用hardening
+| # | 完了項目 | 検出可能な境界 |
+|---:|---|---|
+| 1 | cross-scope lifecycle parity | workspace／deploymentもgrant失効→runtime停止→state detach→owner/admin限定purge |
+| 2 | PluginState write／CAS／quota | owner刻印、revision CAS、64 key、64KiB/value、256KiB/install、超過時旧値保持 |
+| 3 | content-addressed Store | manifest／artifact再hash、ECDSA P-256署名、evidence、非公開stage、atomic publish、append-only audit |
+| 4 | AI候補publish loop | generator無権限、隔離contract test、署名、deployment／新grantは承認待ち、agent tool非配布 |
+| 5 | runtime状態可視化 | active／suspended／failed／retained activeをbuild/use UIへ表示し、Overseerへ永続audit |
+| 6 | UI運用hardening | 4 concurrent、30/plugin/min永続bucket、30秒lease、5秒deadline、timeout時RPC物理cancel |
 
-これらを同じスライスへ先回りして混ぜず、次の意思決定でSpaceと受入条件を改めて固定します。
+検索・購入・ランキング、任意React／browser JavaScript、agent loop自体のプラグイン化、production merge／deployは
+ADRの対象外または別の運用判断であり、この計画の未完了項目には数えません。
 
 ## 参照
 
