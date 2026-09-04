@@ -1,0 +1,43 @@
+name: verify-personal-agent-prototype
+
+on:
+  push:
+    branches: [codex/personal-agent-prototype]
+    paths:
+      - '.github/workflows/verify-personal-agent-prototype.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    env:
+      BASE_URL: https://personal-agent-prototype-yutaro.cherie0915y.workers.dev
+    steps:
+      - name: Verify public UI and health
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --retry 6 --retry-delay 2 "$BASE_URL/health" | tee /tmp/health.json
+          grep -q '"ok":true' /tmp/health.json
+          curl --fail --silent --show-error --retry 6 --retry-delay 2 "$BASE_URL/" | tee /tmp/home.html >/dev/null
+          grep -q '何を進めますか。' /tmp/home.html
+      - name: Verify task and Home Worker protocol
+        run: |
+          set -euo pipefail
+          TOKEN=$(openssl rand -hex 32)
+          AUTH="Authorization: Bearer $TOKEN"
+          CHAT=$(curl --fail --silent --show-error -X POST "$BASE_URL/api/chat" -H "$AUTH" -H 'content-type: application/json' --data '{"text":"E2E smoke task"}')
+          TASK_ID=$(printf '%s' "$CHAT" | jq -r '.task.id')
+          test -n "$TASK_ID" && test "$TASK_ID" != null
+          curl --fail --silent --show-error -X POST "$BASE_URL/api/device/heartbeat" -H "$AUTH" -H 'content-type: application/json' --data '{"deviceId":"ci-home-worker","name":"CI Home Worker","platform":"linux/x64","capabilities":["codex","filesystem","git","shell"],"workspace":"/tmp"}' >/dev/null
+          POLL=$(curl --fail --silent --show-error -X POST "$BASE_URL/api/worker/poll" -H "$AUTH" -H 'content-type: application/json' --data '{"deviceId":"ci-home-worker"}')
+          test "$(printf '%s' "$POLL" | jq -r '.task.id')" = "$TASK_ID"
+          curl --fail --silent --show-error -X POST "$BASE_URL/api/task/$TASK_ID/event" -H "$AUTH" -H 'content-type: application/json' --data '{"type":"working","text":"CI worker executing"}' >/dev/null
+          curl --fail --silent --show-error -X POST "$BASE_URL/api/task/$TASK_ID/complete" -H "$AUTH" -H 'content-type: application/json' --data '{"result":"CI Home Worker result","threadId":"ci-thread"}' >/dev/null
+          SNAP=$(curl --fail --silent --show-error "$BASE_URL/api/snapshot" -H "$AUTH")
+          test "$(printf '%s' "$SNAP" | jq -r '.tasks[-1].status')" = completed
+          test "$(printf '%s' "$SNAP" | jq -r '.messages[-1].text')" = 'CI Home Worker result'
+          test "$(printf '%s' "$SNAP" | jq -r '.devices[-1].deviceId')" = 'ci-home-worker'
