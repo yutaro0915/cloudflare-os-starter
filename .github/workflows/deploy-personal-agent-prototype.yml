@@ -18,18 +18,15 @@ env:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
         with:
           node-version: 24
-      - name: Install
-        working-directory: personal-agent-prototype
-        run: npm install
       - name: Syntax check
         working-directory: personal-agent-prototype
-        run: npm run check
+        run: node --check src/index.js && node --check home-worker/daemon.mjs
       - name: Deploy dedicated Worker
         working-directory: personal-agent-prototype
-        run: npx wrangler deploy
+        run: npx --yes wrangler@4.36.0 deploy
