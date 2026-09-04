@@ -1,0 +1,52 @@
+name: smoke-personal-agent-prototype
+
+on:
+  push:
+    branches: [codex/personal-agent-prototype]
+    paths:
+      - '.github/workflows/smoke-personal-agent-prototype.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    env:
+      BASE_URL: https://personal-agent-prototype-yutaro.cherie0915y.workers.dev
+    steps:
+      - name: Health and task protocol
+        shell: bash
+        run: |
+          set -euo pipefail
+          TOKEN="$(openssl rand -hex 24)"
+          AUTH="Authorization: Bearer ${TOKEN}"
+
+          curl --fail --silent --show-error --retry 6 --retry-delay 2 "$BASE_URL/health" | tee /tmp/health.json
+          grep -q '"ok":true' /tmp/health.json
+
+          curl --fail --silent --show-error -X POST "$BASE_URL/api/chat" \
+            -H "$AUTH" -H 'content-type: application/json' \
+            --data '{"text":"remote smoke test"}' | tee /tmp/chat.json
+          TASK_ID="$(jq -r '.task.id' /tmp/chat.json)"
+          test -n "$TASK_ID" && test "$TASK_ID" != "null"
+
+          curl --fail --silent --show-error -X POST "$BASE_URL/api/device/heartbeat" \
+            -H "$AUTH" -H 'content-type: application/json' \
+            --data '{"deviceId":"ci-smoke","name":"CI Smoke","platform":"linux/x64","capabilities":["codex"]}' >/dev/null
+
+          curl --fail --silent --show-error -X POST "$BASE_URL/api/worker/poll" \
+            -H "$AUTH" -H 'content-type: application/json' \
+            --data '{"deviceId":"ci-smoke"}' | tee /tmp/poll.json
+          test "$(jq -r '.task.id' /tmp/poll.json)" = "$TASK_ID"
+          test "$(jq -r '.task.status' /tmp/poll.json)" = "running"
+
+          curl --fail --silent --show-error -X POST "$BASE_URL/api/task/$TASK_ID/complete" \
+            -H "$AUTH" -H 'content-type: application/json' \
+            --data '{"deviceId":"ci-smoke","result":"remote smoke complete","threadId":"smoke-thread"}' >/dev/null
+
+          curl --fail --silent --show-error "$BASE_URL/api/snapshot" -H "$AUTH" | tee /tmp/snapshot.json
+          test "$(jq -r '.tasks[-1].status' /tmp/snapshot.json)" = "completed"
+          test "$(jq -r '.messages[-1].text' /tmp/snapshot.json)" = "remote smoke complete"
