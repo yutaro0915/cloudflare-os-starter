@@ -30,3 +30,9 @@ jobs:
       - name: Deploy dedicated Worker
         working-directory: personal-agent-prototype
         run: npx --yes wrangler@4.36.0 deploy
+      - name: Verify deployed Worker
+        run: |
+          curl --fail --silent --show-error --retry 6 --retry-delay 2 \
+            https://personal-agent-prototype-yutaro.cherie0915y.workers.dev/health \
+            | tee /tmp/health.json
+          grep -q '"ok":true' /tmp/health.json
