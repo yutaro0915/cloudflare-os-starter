@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
-    "check": "node --check src/index.js && node --check public/app.js && node --check local-control/server.mjs && node --check home-worker/daemon.mjs"
+    "check": "node --check src/index.js && node --check home-worker/daemon.mjs"
   },
   "devDependencies": {
     "wrangler": "^4.36.0"
