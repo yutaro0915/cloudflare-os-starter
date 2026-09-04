@@ -21,15 +21,17 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v6
         with:
           node-version: 24
+          cache: pnpm
+      - name: Install root deployment dependencies
+        run: pnpm install --frozen-lockfile
       - name: Syntax check
-        working-directory: personal-agent-prototype
-        run: node --check src/index.js && node --check home-worker/daemon.mjs
+        run: node --check personal-agent-prototype/src/index.js && node --check personal-agent-prototype/home-worker/daemon.mjs
       - name: Deploy dedicated Worker
-        working-directory: personal-agent-prototype
-        run: npx --yes wrangler@4.36.0 deploy
+        run: pnpm exec wrangler deploy --config personal-agent-prototype/wrangler.jsonc
       - name: Verify deployed Worker
         run: |
           curl --fail --silent --show-error --retry 6 --retry-delay 2 \
