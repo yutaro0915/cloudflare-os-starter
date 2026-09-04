@@ -1,0 +1,8 @@
+{
+  "name": "personal-agent-home-worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {"start":"node daemon.mjs"},
+  "dependencies": {"@openai/codex-sdk":"0.153.2"}
+}
