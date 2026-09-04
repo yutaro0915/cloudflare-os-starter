@@ -16,3 +16,5 @@ Home Server では事前に Codex CLI の認証を済ませてください。Wor
 ## Cloudflare
 
 `personal-agent-prototype-yutaro` という独立 Worker としてデプロイします。既存の `os.cherie-lab.com` 用 Worker には触れません。
+
+デプロイは `codex/personal-agent-prototype` ブランチ専用の GitHub Actions workflow から実行します。
