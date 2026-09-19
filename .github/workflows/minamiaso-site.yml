@@ -1,0 +1,118 @@
+name: Minamiaso site assets
+on:
+  push:
+    branches: ['site/minamiaso-guide']
+    paths: ['.github/workflows/minamiaso-site.yml']
+permissions:
+  contents: read
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install requests beautifulsoup4 pillow
+      - name: Fetch public website assets and geographic evidence
+        run: |
+          mkdir -p minamiaso-build/{pages,photos,vendor,tiles}
+          cat > /tmp/collect.py <<'PY'
+          import requests,json,re,time,math,pathlib,concurrent.futures,urllib.parse
+          from bs4 import BeautifulSoup
+          OUT=pathlib.Path('minamiaso-build')
+          HEAD={'User-Agent':'MinamiasoTravelGuide/1.0 (public tourism guide data verification)'}
+          PAGES={
+           'campaign':'https://fukko2026.minamiaso.info/',
+           'h06':'https://minamiaso.info/spot/hakusuinokura/',
+           'h19':'https://minamiaso.info/spot/hideya/',
+           'h20':'https://minamiaso.info/spot/gon/',
+           'h22':'https://minamiaso.info/spot/caramelpudding/',
+           'h23':'https://www.minamiaso-hakusuisoba.com/',
+           'h23access':'https://minamiaso-hakusuisoba.com/access.html',
+           'h03':'https://www.yamabudou.info/',
+           'h33':'https://minamiaso.info/spot/kamado/',
+           'h48':'https://minamiaso-cyclepitgururi.com/',
+           'h61':'https://www.rurispaofficial.com/',
+           'c05':'https://minamiaso.info/spot/kumaya/',
+           'c05official':'https://r.goope.jp/asokumaya/',
+           'c07':'https://www.dondokoyu.com/',
+           'c16':'https://minamiaso.info/spot/ankoromochi/',
+           'c18':'https://minamiaso.info/spot/seifuso/',
+           'c19':'https://minamiaso.info/spot/tochinoki/',
+           'c22':'https://minamiaso.info/spot/shizenhasoft/',
+           'c25':'https://minamiaso.info/spot/dacco/',
+           'c26':'https://minamiaso.info/spot/minaasomaruden/',
+           'c34':'https://minamiaso.info/spot/merucoro/',
+           'c34nav':'https://www.navita.co.jp/s/11051104/',
+           'c52':'https://tarutama.jp/',
+           'k02':'https://organicoats.jp/',
+           'k05':'https://minamiaso.info/spot/donburako/',
+           'k06':'https://minamiaso.info/spot/minamiasoorganiccafe-asobio/',
+           'k08':'https://minamiaso.info/spot/sansuien/',
+           'k09':'https://r.goope.jp/nakashimashoten/about',
+           'k26':'https://minamiaso.info/spot/310books/',
+           'k29':'https://www.aso-kugino.jp/asobou_shunsai.html',
+           'k31':'https://www.minamiasoshoten.com/',
+           'k33':'https://www.aso-kugino.jp/akaushi.html',
+           'k34':'https://www.aso-sobadojyo.com/',
+           'k39':'https://www.minamiaso-beer.com/',
+           'k51':'https://konokayu.jp/info/'
+          }
+          def get(u):
+           r=requests.get(u,headers=HEAD,timeout=30);r.raise_for_status();return r
+          def page(pair):
+           id,u=pair
+           try:
+            r=get(u);r.encoding=r.apparent_encoding;txt=r.text
+            (OUT/'pages'/f'{id}.html').write_text(txt,encoding='utf-8')
+            s=BeautifulSoup(txt,'html.parser')
+            imgs=[]
+            for i in s.select('img'):
+             v=i.get('data-src') or i.get('src') or ''
+             if v and not v.startswith('data:'):imgs.append({'url':urllib.parse.urljoin(r.url,v),'alt':i.get('alt',''),'class':i.get('class',[])})
+            og=s.select_one('meta[property="og:image"]')
+            maps=[i.get('src') or i.get('data-src') for i in s.select('iframe')]
+            links=[{'url':urllib.parse.urljoin(r.url,a.get('href','')),'text':a.get_text(' ',strip=True)} for a in s.select('a[href]')]
+            return id,dict(url=r.url,images=imgs,og=og.get('content') if og else None,maps=maps,links=links,text=s.get_text(' ',strip=True))
+           except Exception as e:return id,dict(url=u,error=str(e))
+          results=dict(concurrent.futures.ThreadPoolExecutor(max_workers=4).map(page,PAGES.items()))
+          (OUT/'catalog.json').write_text(json.dumps(results,ensure_ascii=False,indent=2))
+          # Geographic evidence: OSM place objects, not guessed or viewport-centre coordinates.
+          q='[out:json][timeout:60];nwr["name"](32.77,130.94,32.94,131.14);out center tags;'
+          for endpoint in ['https://overpass-api.de/api/interpreter','https://overpass.kumi.systems/api/interpreter']:
+           try:
+            r=requests.post(endpoint,data={'data':q},headers=HEAD,timeout=90);r.raise_for_status();j=r.json();(OUT/'osm.json').write_text(json.dumps(j,ensure_ascii=False));break
+           except Exception as e:print('OSM',str(e))
+          # Include pinned OSS distributions locally. No API keys or tracking dependencies.
+          vendor={
+           'leaflet.js':'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js',
+           'leaflet.css':'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css',
+           'leaflet-LICENSE':'https://raw.githubusercontent.com/Leaflet/Leaflet/v1.9.4/LICENSE',
+           'leaflet.markercluster.js':'https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js',
+           'MarkerCluster.css':'https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css',
+           'MarkerCluster.Default.css':'https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css'
+          }
+          for f,u in vendor.items():
+           try:(OUT/'vendor'/f).write_bytes(get(u).content)
+           except Exception as e:print(f,e)
+          # A small fixed overview extent, to remain visible before online detail tiles load.
+          def tile(lon,lat,z):return int((lon+180)/360*2**z),int((1-math.asinh(math.tan(math.radians(lat)))/math.pi)/2*2**z)
+          z=12;x1,y1=tile(130.96,32.93,z);x2,y2=tile(131.12,32.79,z)
+          tiles=[]
+          for x in range(x1,x2+1):
+           for y in range(y1,y2+1):
+            u=f'https://cyberjapandata.gsi.go.jp/xyz/pale/{z}/{x}/{y}.png'
+            try:
+             b=get(u).content;(OUT/'tiles'/f'{z}-{x}-{y}.png').write_bytes(b);tiles.append({'z':z,'x':x,'y':y,'url':u})
+            except Exception as e:print('tile',e)
+          (OUT/'tiles.json').write_text(json.dumps(tiles))
+          print('PAGES',len(results),'OSM',(OUT/'osm.json').exists(),'TILES',len(tiles))
+          PY
+          python /tmp/collect.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: minamiaso-public-assets
+          path: minamiaso-build
+          retention-days: 7
