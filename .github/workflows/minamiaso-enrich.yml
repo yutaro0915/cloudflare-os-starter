@@ -1,0 +1,76 @@
+name: Minamiaso source enrichment
+on:
+  push:
+    branches: ['site/minamiaso-guide']
+    paths: ['.github/workflows/minamiaso-enrich.yml']
+permissions:
+  contents: read
+  actions: read
+jobs:
+  enrich:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/download-artifact@v4
+        with:
+          name: minamiaso-public-assets
+          path: build
+          run-id: 35473992231
+          github-token: ${{ github.token }}
+      - run: pip install requests beautifulsoup4 pillow
+      - name: Download documented images and map metadata
+        run: |
+          cat > /tmp/enrich.py <<'PY'
+          import requests,json,re,pathlib,concurrent.futures,urllib.parse,io
+          from PIL import Image,ImageOps
+          from bs4 import BeautifulSoup
+          P=pathlib.Path('build');(P/'maps').mkdir(exist_ok=True);(P/'chunks').mkdir(exist_ok=True)
+          C=json.loads((P/'catalog.json').read_text()); UA={'User-Agent':'Mozilla/5.0 (compatible; MinamiasoTravelGuide/1.0)'}
+          def get(u):
+           r=requests.get(u,headers=UA,timeout=25);r.raise_for_status();return r
+          def maps(pair):
+           k,v=pair;out=[]
+           urls=[]
+           for u in v.get('maps',[]):
+            if u and ('google.com/maps' in u or '/pc/map/' in u):urls.append(urllib.parse.urljoin(v['url'],u))
+           for a in v.get('links',[]):
+            if any(s in a['url'] for s in ['maps.app.goo.gl','goo.gl/maps','maps.google']):urls.append(a['url'])
+           for n,u in enumerate(dict.fromkeys(urls)):
+            try:
+             r=get(u);f=f'{k}-{n}.html';(P/'maps'/f).write_text(r.text);out.append({'requested':u,'url':r.url,'file':f})
+            except Exception as e:out.append({'requested':u,'error':str(e)})
+           return k,out
+          M=dict(concurrent.futures.ThreadPoolExecutor(max_workers=3).map(maps,C.items()));(P/'map-index.json').write_text(json.dumps(M,ensure_ascii=False,indent=2))
+          # Read the campaign's own client data, rather than inferring participation from other schemes.
+          soup=BeautifulSoup((P/'pages/campaign.html').read_text(),'html.parser')
+          for n,s in enumerate(soup.select('script[src]')):
+           u=urllib.parse.urljoin(C['campaign']['url'],s['src'])
+           try:(P/'chunks'/f'{n}.js').write_text(get(u).text)
+           except Exception as e:print('chunk',e)
+          indices={'h03':[1],'h23':[1,2,3],'h61':[3,4,5],'c07':[0,8],'c52':[1,2,4],'k02':[13,8],'k31':[8,12],'k33':[7,8],'k34':[0,1],'k39':[1,2,7]}
+          jobs=[]
+          for k,v in C.items():
+           if not re.fullmatch('[hck][0-9]{2}',k):continue
+           images=v.get('images',[])
+           if 'minamiaso.info/spot/' in v['url']:
+            imgs=[i for i in images if '/uploads/' in i['url'] and not any(s in i['url'] for s in ['banner','120x90','150x150'])][:3]
+           else:imgs=[images[i] for i in indices.get(k,[]) if i<len(images)]
+           for n,i in enumerate(imgs):jobs.append((k,n,i['url'],v['url']))
+          def photo(t):
+           k,n,u,source=t
+           try:
+            r=get(u);im=Image.open(io.BytesIO(r.content));im=ImageOps.exif_transpose(im).convert('RGB');im.thumbnail((1400,1000));f=f'{k}-{n}.jpg';im.save(P/'photos'/f,quality=87,optimize=True)
+            return dict(id=k,file=f,url=u,source=source,width=im.width,height=im.height)
+           except Exception as e:return dict(id=k,url=u,error=str(e))
+          R=list(concurrent.futures.ThreadPoolExecutor(max_workers=4).map(photo,jobs));(P/'photo-index.json').write_text(json.dumps(R,ensure_ascii=False,indent=2))
+          print('PHOTOS',sum('file'in r for r in R),'MAPFILES',len(list((P/'maps').glob('*'))),'CHUNKS',len(list((P/'chunks').glob('*'))))
+          PY
+          python /tmp/enrich.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: minamiaso-enriched-assets
+          path: build
+          retention-days: 7
