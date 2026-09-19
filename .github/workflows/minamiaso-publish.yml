@@ -12,18 +12,22 @@ concurrency:
 jobs:
   prepare:
     runs-on: ubuntu-latest
-    timeout-minutes: 3
+    timeout-minutes: 4
     steps:
-      - name: Retrieve the public-content release and verify integrity
+      - run: python -m pip install pillow
+      - name: Retrieve public website bundle and verify integrity
         env:
-          RELEASE_URL: 'https://sdmntprkoreacentral.oaiusercontent.com/files/00000000-3548-8206-b2b6-b61aec25ab89/raw?se=2026-09-19T23%3A09%3A28Z&sp=r&sv=2026-02-06&sr=b&scid=94ec058c-cc40-5dd4-8089-f1c991594041&skoid=9063adf3-a524-4acf-b70a-8731b33f2f50&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-09-19T20%3A09%3A14Z&ske=2026-09-20T20%3A09%3A14Z&sks=b&skv=2026-02-06&sig=ULuYR6971IuI92f171srMjXf3TKMVBSeKpI2aDCEa3k%3D'
+          RELEASE_IMAGE: 'https://lh7-rt.googleusercontent.com/docsz/AD_4nXekkcRnp6xlaIXd0XBbZWQaqWQVIFOylGRdHumy3Rnu1HR9YBiIhoC0ROaRpj9AZXyJHWPAZ9Dx90dK5YWO4RBw7ndUTOx-SQx7xM5NseLUQijkDzlYLHkMx-9xM4cpYTRFJ8MIDi3Eq0uMxvRarIKPSkZuF4yEiLsPQC-IG49m37gY=s2048?key=ynVju5ihrcpfnvf2z25o5g'
         run: |
           python - <<'PY'
-          import os,urllib.request,re,base64,hashlib,zipfile,io,pathlib,json
-          html=urllib.request.urlopen(os.environ['RELEASE_URL'],timeout=45).read().decode()
-          body=re.search(r'<pre id="payload">(.*?)</pre>',html,re.S).group(1)
-          raw=base64.b64decode(body,validate=True)
-          assert hashlib.sha256(raw).hexdigest()=='7861feff37f31953ab2fb4ffa51c3802e9553bd7c7eff4a8d34dadf1f415a098'
+          import os,urllib.request,hashlib,zipfile,io,pathlib,json
+          from PIL import Image
+          # The image contains only this public website's release bytes; no personal data or credentials.
+          image=Image.open(io.BytesIO(urllib.request.urlopen(os.environ['RELEASE_IMAGE'],timeout=45).read())).convert('RGB')
+          data=image.tobytes();magic=b'MINAMIASO_SITE_V1'
+          assert data.startswith(magic),('Transfer image changed',image.size)
+          off=len(magic);size=int.from_bytes(data[off:off+8],'big');raw=data[off+8:off+8+size]
+          assert hashlib.sha256(raw).hexdigest()=='1fbfb58252b2e5349dadd2b51c5b1970614f5809b210014384f95955ac9ffd4d'
           z=zipfile.ZipFile(io.BytesIO(raw))
           for item in z.infolist():
               p=pathlib.PurePosixPath(item.filename)
@@ -33,9 +37,10 @@ jobs:
           z.extractall('site')
           cfg=json.loads(pathlib.Path('site/wrangler.jsonc').read_text())
           assert cfg['name']=='minamiaso-travel-guide' and set(cfg)=={'name','compatibility_date','workers_dev','assets'}
-          data=json.loads(pathlib.Path('site/public/data.json').read_text())
-          assert len(data['stores'])==220
-          print('Release checksum verified; 220 campaign facilities; isolated static site configuration.')
+          d=json.loads(pathlib.Path('site/public/data.json').read_text())
+          assert len(d['stores'])==219 and len({s['id'] for s in d['stores']})==219
+          assert d['officialRecordCount']==220
+          print('Release checksum verified; 220 official records, 219 distinct facilities; isolated static site.')
           PY
       - uses: actions/upload-artifact@v4
         with:
@@ -47,7 +52,7 @@ jobs:
     needs: prepare
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    # Keep the repository's existing production approval gate; do not bypass it.
+    # Preserve the repository's production approval requirement.
     environment: production
     steps:
       - uses: actions/download-artifact@v4
@@ -67,7 +72,7 @@ jobs:
           test -n "$CLOUDFLARE_ACCOUNT_ID" || { echo 'Cloudflare account identifier unavailable'; exit 1; }
           set -o pipefail
           npx --yes wrangler@4.102.0 deploy --config wrangler.jsonc 2>&1 | tee ../deploy.log
-      - name: Record the actual public URL and check asset delivery
+      - name: Record returned public URL and verify static delivery
         run: |
           mkdir -p proof
           python - <<'PY'
@@ -75,27 +80,23 @@ jobs:
           text=pathlib.Path('deploy.log').read_text()
           urls=re.findall(r'https://minamiaso-travel-guide\.[a-zA-Z0-9-]+\.workers\.dev',text)
           assert urls,'No public deployment URL returned by Wrangler'
-          url=urls[-1]
-          pathlib.Path('proof/url.txt').write_text(url)
-          results=[]
-          for path in ['/','/app.css','/app.js','/vendor/leaflet.js','/data.json']:
+          url=urls[-1];pathlib.Path('proof/url.txt').write_text(url);results=[]
+          for path in ['/','/app.css','/app.js','/vendor/leaflet.js','/data.json','/assets/h06.jpg']:
               for attempt in range(8):
                   try:
-                      response=urllib.request.urlopen(url+path,timeout=25)
-                      payload=response.read();assert response.status==200 and len(payload)>0
-                      results.append({'path':path,'status':response.status,'bytes':len(payload)});break
+                      r=urllib.request.urlopen(url+path,timeout=25);payload=r.read();assert r.status==200 and payload
+                      results.append({'path':path,'status':r.status,'bytes':len(payload)});break
                   except Exception:
                       if attempt==7:raise
                       time.sleep(5)
-          pathlib.Path('proof/http.json').write_text(json.dumps(results,indent=2))
-          print('PUBLIC_URL='+url)
+          pathlib.Path('proof/http.json').write_text(json.dumps(results,indent=2));print('PUBLIC_URL='+url)
           PY
           echo "Public site: $(cat proof/url.txt)" >> "$GITHUB_STEP_SUMMARY"
       - name: Install browser verifier
         run: |
           python -m pip install playwright
           python -m playwright install --with-deps chromium
-      - name: Verify desktop and mobile list-map interactions on the public site
+      - name: Verify public desktop and mobile interactions
         run: |
           cat > /tmp/sitecheck.py <<'PY'
           from playwright.sync_api import sync_playwright
@@ -108,29 +109,25 @@ jobs:
                   c=b.new_context(**options);page=c.new_page();errors=[]
                   page.on('pageerror',lambda e:errors.append(str(e)))
                   page.goto(url,wait_until='domcontentloaded',timeout=60000)
-                  page.wait_for_function('window.__guideMap && window.__guide',timeout=20000)
-                  page.wait_for_timeout(3000)
-                  assert page.locator('#resultCount').inner_text()=='220件'
+                  page.wait_for_function('window.__guideMap && window.__guide',timeout=20000);page.wait_for_timeout(3500)
+                  assert page.locator('#resultCount').inner_text()=='219件'
                   assert page.evaluate('document.documentElement.scrollWidth<=innerWidth+1')
-                  broken=page.locator('.place-card img').evaluate_all('(imgs)=>imgs.filter(x=>x.complete&&!x.naturalWidth).map(x=>x.src)')
+                  assert page.locator('.facility-card:visible').first.get_attribute('data-store')=='h06'
+                  broken=page.locator('.facility-card img').evaluate_all('(imgs)=>imgs.filter(x=>x.complete&&!x.naturalWidth).map(x=>x.src)')
                   page.screenshot(path=str(out/f'{kind}.png'))
                   if kind=='desktop':
                       page.locator('#card-h06 [data-open]').first.click();page.wait_for_timeout(300)
                       assert page.locator('#detailDialog').evaluate('(e)=>e.open')
-                      page.screenshot(path=str(out/'detail.png'))
-                      page.locator('[data-close="detailDialog"]').click()
-                      page.locator('[data-cat="cafe"]').click()
-                      assert page.locator('#resultCount').inner_text()=='42件'
+                      page.screenshot(path=str(out/'detail.png'));page.locator('[data-close="detailDialog"]').click()
+                      page.locator('[data-cat="cafe"]').click();assert page.locator('#resultCount').inner_text()=='42件'
                   else:
-                      page.locator('#viewToggle').click();page.wait_for_timeout(1500)
-                      assert page.locator('#map').is_visible()
+                      page.locator('#viewToggle').click();page.wait_for_timeout(1500);assert page.locator('#map').is_visible()
                       page.evaluate('window.__guide.selectPlace("h06",{from:"map"})');page.wait_for_timeout(1500)
                       page.screenshot(path=str(out/'mobile-map.png'))
                   tilecount=page.locator('.leaflet-tile-loaded').count()
                   assert not errors,errors
                   assert not broken,broken
-                  report[kind]={'page_errors':errors,'broken_card_images':broken,'loaded_map_tiles':tilecount,'viewport':options['viewport'],'checked':True}
-                  c.close()
+                  report[kind]={'page_errors':errors,'broken_card_images':broken,'loaded_map_tiles':tilecount,'viewport':options['viewport'],'checked':True};c.close()
               b.close()
           (out/'browser-check.json').write_text(json.dumps(report,ensure_ascii=False,indent=2));print(json.dumps(report))
           PY
