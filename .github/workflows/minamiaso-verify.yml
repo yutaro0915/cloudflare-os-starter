@@ -1,0 +1,70 @@
+name: Verify Minamiaso travel guide
+on:
+  push:
+    branches: ['site/minamiaso-guide']
+    paths: ['.github/workflows/minamiaso-verify.yml']
+permissions:
+  contents: read
+  actions: read
+jobs:
+  browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: minamiaso-deployable-site
+          path: site
+          run-id: 35475304967
+          github-token: ${{ github.token }}
+      - run: |
+          python -m pip install playwright
+          python -m playwright install --with-deps chromium
+      - name: Test the release with actual network access
+        run: |
+          mkdir -p proof
+          python -m http.server 8765 --directory site/public >/tmp/minamiaso-http.log 2>&1 &
+          cat > /tmp/verify.py <<'PY'
+          from playwright.sync_api import sync_playwright
+          from pathlib import Path
+          import json
+          P=Path('proof');report={}
+          with sync_playwright() as p:
+            b=p.chromium.launch(headless=True)
+            for kind,opts in [('desktop',dict(viewport={'width':1440,'height':1000})),('mobile',dict(viewport={'width':390,'height':844},is_mobile=True,has_touch=True,device_scale_factor=2))]:
+              c=b.new_context(**opts);page=c.new_page();err=[];page.on('pageerror',lambda e:err.append(str(e)))
+              page.goto('http://127.0.0.1:8765',wait_until='domcontentloaded');page.wait_for_function('window.__guide && window.__guideMap');page.wait_for_timeout(5000)
+              assert page.locator('#resultCount').inner_text()=='219件'
+              assert page.locator('.facility-card:visible').first.get_attribute('data-store')=='h06'
+              assert page.evaluate('document.documentElement.scrollWidth <= innerWidth+1')
+              photo=page.locator('#card-h06 img').evaluate('(x)=>({w:x.naturalWidth,h:x.naturalHeight})');assert photo['w']>0
+              page.screenshot(path=str(P/f'{kind}.png'))
+              if kind=='mobile':
+                page.locator('#viewToggle').click();page.wait_for_timeout(1500)
+                page.evaluate('window.__guide.selectPlace("h06",{from:"map"})');page.wait_for_timeout(2000)
+                assert page.locator('#mapPeek').is_visible()
+                page.screenshot(path=str(P/'mobile-map.png'))
+                page.locator('#viewToggle').click();assert page.locator('#listPanel').is_visible()
+              page.locator('#card-h06 [data-open]').first.click();assert page.locator('#detailDialog').evaluate('(e)=>e.open')
+              page.screenshot(path=str(P/f'{kind}-detail.png'));page.locator('[data-close="detailDialog"]').click()
+              page.locator('[data-cat="cafe"]').click();assert page.locator('#resultCount').inner_text()=='42件'
+              page.locator('#savedToggle').click();assert page.locator('#empty').is_visible()
+              assert not err,err
+              tiles=page.locator('.leaflet-tile-loaded').count()
+              report[kind]={'errors':err,'photo':photo,'loaded_tiles':tiles,'pass':True}
+              c.close()
+            # Progressive enhancement: content and image bytes exist without JavaScript.
+            c=b.new_context(java_script_enabled=False,viewport={'width':390,'height':844});page=c.new_page()
+            page.goto('http://127.0.0.1:8765',wait_until='domcontentloaded')
+            assert page.locator('[data-store]').count()==219
+            page.locator('#info-h06 summary').click();assert page.locator('#info-h06').get_attribute('open') is not None
+            report['no_javascript']={'facilities':219,'native_details':True};b.close()
+          (P/'report.json').write_text(json.dumps(report,ensure_ascii=False,indent=2));print(json.dumps(report))
+          PY
+          python /tmp/verify.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: minamiaso-browser-verification
+          path: proof
+          retention-days: 30
