@@ -1,0 +1,145 @@
+name: Publish Minamiaso travel guide
+on:
+  push:
+    branches: ['site/minamiaso-guide']
+    paths: ['.github/workflows/minamiaso-publish.yml']
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: minamiaso-travel-guide-release
+  cancel-in-progress: false
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Retrieve the public-content release and verify integrity
+        env:
+          RELEASE_URL: 'https://sdmntprkoreacentral.oaiusercontent.com/files/00000000-3548-8206-b2b6-b61aec25ab89/raw?se=2026-09-19T23%3A09%3A28Z&sp=r&sv=2026-02-06&sr=b&scid=94ec058c-cc40-5dd4-8089-f1c991594041&skoid=9063adf3-a524-4acf-b70a-8731b33f2f50&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-09-19T20%3A09%3A14Z&ske=2026-09-20T20%3A09%3A14Z&sks=b&skv=2026-02-06&sig=ULuYR6971IuI92f171srMjXf3TKMVBSeKpI2aDCEa3k%3D'
+        run: |
+          python - <<'PY'
+          import os,urllib.request,re,base64,hashlib,zipfile,io,pathlib,json
+          html=urllib.request.urlopen(os.environ['RELEASE_URL'],timeout=45).read().decode()
+          body=re.search(r'<pre id="payload">(.*?)</pre>',html,re.S).group(1)
+          raw=base64.b64decode(body,validate=True)
+          assert hashlib.sha256(raw).hexdigest()=='7861feff37f31953ab2fb4ffa51c3802e9553bd7c7eff4a8d34dadf1f415a098'
+          z=zipfile.ZipFile(io.BytesIO(raw))
+          for item in z.infolist():
+              p=pathlib.PurePosixPath(item.filename)
+              assert not p.is_absolute() and '..' not in p.parts
+              assert p.parts[0] in ('public','wrangler.jsonc')
+              assert (item.external_attr>>16)&0o170000 != 0o120000
+          z.extractall('site')
+          cfg=json.loads(pathlib.Path('site/wrangler.jsonc').read_text())
+          assert cfg['name']=='minamiaso-travel-guide' and set(cfg)=={'name','compatibility_date','workers_dev','assets'}
+          data=json.loads(pathlib.Path('site/public/data.json').read_text())
+          assert len(data['stores'])==220
+          print('Release checksum verified; 220 campaign facilities; isolated static site configuration.')
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: minamiaso-deployable-site
+          path: site
+          include-hidden-files: true
+          retention-days: 30
+  publish:
+    needs: prepare
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # Keep the repository's existing production approval gate; do not bypass it.
+    environment: production
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: minamiaso-deployable-site
+          path: site
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Deploy only the new standalone static worker
+        working-directory: site
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          test -n "$CLOUDFLARE_API_TOKEN" || { echo 'Cloudflare deployment credential unavailable'; exit 1; }
+          test -n "$CLOUDFLARE_ACCOUNT_ID" || { echo 'Cloudflare account identifier unavailable'; exit 1; }
+          set -o pipefail
+          npx --yes wrangler@4.102.0 deploy --config wrangler.jsonc 2>&1 | tee ../deploy.log
+      - name: Record the actual public URL and check asset delivery
+        run: |
+          mkdir -p proof
+          python - <<'PY'
+          import re,pathlib,urllib.request,time,json
+          text=pathlib.Path('deploy.log').read_text()
+          urls=re.findall(r'https://minamiaso-travel-guide\.[a-zA-Z0-9-]+\.workers\.dev',text)
+          assert urls,'No public deployment URL returned by Wrangler'
+          url=urls[-1]
+          pathlib.Path('proof/url.txt').write_text(url)
+          results=[]
+          for path in ['/','/app.css','/app.js','/vendor/leaflet.js','/data.json']:
+              for attempt in range(8):
+                  try:
+                      response=urllib.request.urlopen(url+path,timeout=25)
+                      payload=response.read();assert response.status==200 and len(payload)>0
+                      results.append({'path':path,'status':response.status,'bytes':len(payload)});break
+                  except Exception:
+                      if attempt==7:raise
+                      time.sleep(5)
+          pathlib.Path('proof/http.json').write_text(json.dumps(results,indent=2))
+          print('PUBLIC_URL='+url)
+          PY
+          echo "Public site: $(cat proof/url.txt)" >> "$GITHUB_STEP_SUMMARY"
+      - name: Install browser verifier
+        run: |
+          python -m pip install playwright
+          python -m playwright install --with-deps chromium
+      - name: Verify desktop and mobile list-map interactions on the public site
+        run: |
+          cat > /tmp/sitecheck.py <<'PY'
+          from playwright.sync_api import sync_playwright
+          from pathlib import Path
+          import json
+          out=Path('proof');url=(out/'url.txt').read_text().strip();report={}
+          with sync_playwright() as p:
+              b=p.chromium.launch(headless=True)
+              for kind,options in [('desktop',{'viewport':{'width':1440,'height':1000}}),('mobile',{'viewport':{'width':390,'height':844},'is_mobile':True,'has_touch':True,'device_scale_factor':2})]:
+                  c=b.new_context(**options);page=c.new_page();errors=[]
+                  page.on('pageerror',lambda e:errors.append(str(e)))
+                  page.goto(url,wait_until='domcontentloaded',timeout=60000)
+                  page.wait_for_function('window.__guideMap && window.__guide',timeout=20000)
+                  page.wait_for_timeout(3000)
+                  assert page.locator('#resultCount').inner_text()=='220件'
+                  assert page.evaluate('document.documentElement.scrollWidth<=innerWidth+1')
+                  broken=page.locator('.place-card img').evaluate_all('(imgs)=>imgs.filter(x=>x.complete&&!x.naturalWidth).map(x=>x.src)')
+                  page.screenshot(path=str(out/f'{kind}.png'))
+                  if kind=='desktop':
+                      page.locator('#card-h06 [data-open]').first.click();page.wait_for_timeout(300)
+                      assert page.locator('#detailDialog').evaluate('(e)=>e.open')
+                      page.screenshot(path=str(out/'detail.png'))
+                      page.locator('[data-close="detailDialog"]').click()
+                      page.locator('[data-cat="cafe"]').click()
+                      assert page.locator('#resultCount').inner_text()=='42件'
+                  else:
+                      page.locator('#viewToggle').click();page.wait_for_timeout(1500)
+                      assert page.locator('#map').is_visible()
+                      page.evaluate('window.__guide.selectPlace("h06",{from:"map"})');page.wait_for_timeout(1500)
+                      page.screenshot(path=str(out/'mobile-map.png'))
+                  tilecount=page.locator('.leaflet-tile-loaded').count()
+                  assert not errors,errors
+                  assert not broken,broken
+                  report[kind]={'page_errors':errors,'broken_card_images':broken,'loaded_map_tiles':tilecount,'viewport':options['viewport'],'checked':True}
+                  c.close()
+              b.close()
+          (out/'browser-check.json').write_text(json.dumps(report,ensure_ascii=False,indent=2));print(json.dumps(report))
+          PY
+          python /tmp/sitecheck.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: minamiaso-publication-proof
+          path: |
+            proof
+            deploy.log
+          retention-days: 30
