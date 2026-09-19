@@ -1,0 +1,34 @@
+name: Minamiaso official geographic data
+on:
+  push:
+    branches: ['site/minamiaso-guide']
+    paths: ['.github/workflows/minamiaso-geodata.yml']
+permissions:
+  contents: read
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - run: |
+          mkdir -p official
+          python - <<'PY'
+          import urllib.request,json,pathlib
+          P=pathlib.Path('official');urls={
+          'campaign-map.kml':'https://www.google.com/maps/d/kml?mid=1xJ4rhzmrd3M9_ILlcYK23SX-m3Box2Q&forcekml=1',
+          'campaign-map.kmz':'https://www.google.com/maps/d/kml?mid=1xJ4rhzmrd3M9_ILlcYK23SX-m3Box2Q',
+          'c52.jpg':'https://tarutama.jp/wp-content/uploads/2021/09/241468221_285879129594826_7563276288786827052_n-1240x826.jpeg',
+          'c07.webp':'https://www.dondokoyu.com/img/sp/02_source-optimized.webp'}
+          log=[]
+          for f,u in urls.items():
+           try:
+            r=urllib.request.urlopen(urllib.request.Request(u,headers={'User-Agent':'Mozilla/5.0'}),timeout=20);b=r.read();(P/f).write_bytes(b);log.append({'file':f,'url':u,'status':r.status,'size':len(b),'type':r.headers.get('Content-Type')})
+           except Exception as e:log.append({'file':f,'url':u,'error':str(e)})
+          (P/'sources.json').write_text(json.dumps(log,ensure_ascii=False,indent=2))
+          print(json.dumps(log,ensure_ascii=False))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: minamiaso-official-map
+          path: official
+          retention-days: 7
