@@ -1,0 +1,62 @@
+name: Minamiaso photos and campaign records
+on:
+  push:
+    branches: ['site/minamiaso-guide']
+    paths: ['.github/workflows/minamiaso-photos.yml']
+permissions:
+  contents: read
+  actions: read
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/download-artifact@v4
+        with:
+          name: minamiaso-enriched-assets
+          path: build
+          run-id: 35474074517
+          github-token: ${{ github.token }}
+      - run: pip install requests pillow
+      - run: |
+          cat > /tmp/photos.py <<'PY'
+          from pathlib import Path
+          import requests,json,re,io,concurrent.futures
+          from PIL import Image,ImageOps
+          P=Path('build');(P/'photos').mkdir(exist_ok=True)
+          C=json.loads((P/'catalog.json').read_text()); old=json.loads((P/'photo-index.json').read_text())
+          headers={'User-Agent':'Mozilla/5.0 (MinamiasoTravelGuide/1.0)'}
+          def get(u):
+           r=requests.get(u,headers=headers,timeout=25);r.raise_for_status();return r
+          jobs=[];counts={}
+          for p in old:
+           if any(x in p['url'] for x in ['bann','banner','rentacycle','icon','logo','120x90']):continue
+           k=p['id'];n=counts.get(k,0);counts[k]=n+1;jobs.append((k,n,p['url'],C[k]['url']))
+          def photo(t):
+           k,n,u,source=t
+           try:
+            im=ImageOps.exif_transpose(Image.open(io.BytesIO(get(u).content))).convert('RGB');im.thumbnail((1200,900));f=f'{k}-{n}.jpg';im.save(P/'photos'/f,quality=85,optimize=True)
+            return dict(id=k,file=f,url=u,source=source,width=im.width,height=im.height)
+           except Exception as e:return dict(id=k,url=u,error=str(e))
+          results=list(concurrent.futures.ThreadPoolExecutor(max_workers=4).map(photo,jobs));(P/'photo-index.json').write_text(json.dumps(results,ensure_ascii=False,indent=2))
+          seen=set()
+          for round in range(3):
+           paths=set()
+           for f in (P/'chunks').glob('*.js'):paths.update(re.findall(r'(?:static/)?chunks/[\w.-]+\.js',f.read_text()))
+           new=paths-seen
+           for path in new:
+            seen.add(path)
+            if '2chcyotrcrdm-' in path:continue
+            try:(P/'chunks'/Path(path).name).write_text(get('https://fukko2026.minamiaso.info/_next/'+path).text)
+            except Exception as e:print(e)
+          print('PHOTOS',sum('file' in r for r in results),'CHUNKS',len(list((P/'chunks').glob('*'))))
+          PY
+          python /tmp/photos.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: minamiaso-ready-assets
+          path: build
+          retention-days: 7
